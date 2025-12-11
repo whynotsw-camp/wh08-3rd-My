@@ -25,8 +25,6 @@ data_val = pd.read_csv(
 data = pd.concat([data, data_val], axis=0).reset_index(drop=True)
 
 
-
-
 # 2) 불필요한 컬럼 제거
 data = data.drop(
     columns=[
