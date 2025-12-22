@@ -59,7 +59,6 @@ class UserInputSerializer(serializers.Serializer):
     이미지 경로(top_img, bottom_img, onepiece_img) 필드를 추가했습니다.
     """
     # 공통 정보
-    gender = serializers.CharField(required=False, allow_null=True)
     season = serializers.CharField(required=True)
     disliked_accords = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True

@@ -1,10 +1,10 @@
 /* ============================================================
    1. 공통 및 레이아웃 (기존 코드 유지)
    ============================================================ */
-.form-container { max-width: 1200px; width: 95%; margin: 0 auto; padding-bottom: 100px; font-family: 'Pretendard', sans-serif; }
-.page-title { text-align: left; margin-top: 40px; margin-bottom: 30px; font-size: 20px; font-weight: bold; padding-left: 20px; }
-.section { margin-bottom: 50px; }
-.content-align { padding: 0 20px; }
+.form-container { max-width: 1100px; width: 95%; margin: 0 auto; padding-bottom: 100px; font-family: 'Pretendard', sans-serif; }
+.page-title {padding-left: 0; margin-bottom: 20px; font-size: 20px; font-weight: bold; color: #333;}
+.section {max-width: 1100px; width: 100%;margin-left: auto;margin-right: auto; margin-bottom: 60px; }
+.content-align { padding: 0;}
 .section-title { font-size: 16px; margin-bottom: 15px; font-weight: 700; color: #333; }
 
 /* 공통 선택 버튼 */
@@ -19,8 +19,16 @@
    2. 코디 섹션 (for-me.html 기능 유지)
    ============================================================ */
 .clothing-box {
-    width: 100%; border: 1px solid #eee; border-radius: 25px; padding: 40px;
-    margin-bottom: 30px; background-color: #fff; box-sizing: border-box;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto 30px auto;
+
+    /* 나머지 기존 스타일 유지 */
+    border: 1px solid #eee;
+    border-radius: 25px;
+    padding: 40px;
+    background-color: #fff;
+    box-sizing: border-box;
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 .box-label {
@@ -30,9 +38,9 @@
 
 .outfit-row, .split-layout {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: flex-start;
-    gap: 30px;
+    gap: 80px;
     margin-bottom: 30px;
 }
 
@@ -84,7 +92,7 @@
 
 /* [우측] 미리보기 영역 (선택 페이지용) */
 .preview-container {
-    flex: 1; display: flex; align-items: center; gap: 12px; justify-content: flex-end;
+    flex: none; display: flex; align-items: center; gap: 12px; justify-content: flex-end;
 }
 .preview-box {
     width: 105px; height: 150px; border-radius: 45px; background-color: #f2f2f2;
@@ -95,7 +103,7 @@
 .preview-box img { width: 100%; height: 100%; object-fit: cover; }
 .refresh-icon { cursor: pointer; color: #555; font-size: 26px; margin-left: 10px; transition: 0.4s; }
 
-.submit-container { text-align: right; padding: 40px 20px; }
+.submit-container {max-width: 1200px; width: 100%; margin: 0 auto; text-align: right; padding: 40px 20px; }
 .submit-btn {
     background-color: #673ab7; color: white; padding: 14px 60px;
     border-radius: 30px; border: none; font-size: 16px; font-weight: bold; cursor: pointer;
@@ -105,7 +113,7 @@
 /* ============================================================
    3. 비선호 취향 (아코디언 기능 유지)
    ============================================================ */
-.accord-category { border-bottom: 1px solid #f0f0f0; margin-bottom: 5px; }
+.accord-category {width: 100%; border-bottom: 1px solid #f0f0f0;}
 .accord-header {
     display: flex; justify-content: space-between; align-items: center;
     padding: 12px 15px; background-color: #fafafa; border-radius: 10px; cursor: pointer; transition: background 0.2s;
@@ -144,7 +152,7 @@
     background: #fff;
     padding: 10px;
     border-radius: 15px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.15); /* 그림자 강조 */
+    box-shadow: 0 12px 30px rgba(0,0,0,0.15);
     border: 1px solid #fff;
     object-fit: cover;
     transition: all 0.4s ease;

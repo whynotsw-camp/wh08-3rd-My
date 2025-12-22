@@ -178,7 +178,7 @@ class UserInputView(APIView):
                 'red': '레드', 'yellow': '옐로우', 'blue': '블루', 'lavender': '라벤더',
                 'wine': '와인', 'silver': '실버', 'orange': '오렌지', 'khaki': '카키',
                 'green': '그린', 'purple': '퍼플', 'mint': '민트', 'gold': '골드',
-                'neon': '네온', 'jeans_blue': '진청'
+                'neon': '네온',
             }
 
             final_season = data['season']
@@ -307,7 +307,6 @@ class RecommendationView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# api_views.py 내 RecommendationResultAPIView 수정
 
 class RecommendationResultAPIView(APIView):
     renderer_classes = [JSONRenderer]
@@ -337,3 +336,30 @@ class RecommendationResultAPIView(APIView):
             "perfumes": perfumes_data  # 점수 고장 시 빈 배열 [] 이 감
         }
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+#향수 이미지 api
+
+class PerfumeTop3ImageAPI(APIView):
+    """
+    추천된 상위 3개 향수의 이미지 경로만 반환하는 API
+    """
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request):
+        # 1. 나중에 Score가 고쳐지면 아래 주석을 해제하세요.
+        # top3_ids = list(Score.objects.order_by('-myscore').values_list('perfume_id', flat=True)[:3])
+
+        # 2. 지금은 테스트를 위해 ID 0, 1, 2번을 강제로 지정합니다.
+        top3_ids = [0, 1, 2]
+
+        results = []
+        for pid in top3_ids:
+            # 폴더 구조에 맞춰 경로 생성: /static/ui/perfume/0.jpg
+            img_path = f"/static/ui/perfume_images/{pid}.jpg"
+            results.append({
+                "perfume_id": pid,
+                "image_url": img_path
+            })
+
+        return Response(results, status=200)

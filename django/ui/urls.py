@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/recommend/', RecommendationView.as_view(), name='recommendation'),
     path('api/filter-images/', FilterImagesAPI.as_view(), name='filter-images'),
     path('api/user-outfit/', api_views.UserOutfitAPIView.as_view(), name='user-outfit'),
+    path('api/perfume-top3-images/', api_views.PerfumeTop3ImageAPI.as_view(), name='perfume-top3-images'),
     path('api/recommendation-results/', api_views.RecommendationResultAPIView.as_view(), name='recommendation-results'),
 
 

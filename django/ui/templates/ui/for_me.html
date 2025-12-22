@@ -5,23 +5,12 @@
 <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <!-- 스타일 버전 관리를 위해 파라미터 추가 -->
-<link rel="stylesheet" type="text/css" href="{% static 'ui/style.css' %}?v=2.6">
+<link rel="stylesheet" type="text/css" href="{% static 'ui/style.css' %}?v=3.1">
 
-<div class="form-container">
-    <!-- 1. 성별 섹션 -->
-    <div class="section">
-        <div class="page-title">1. 성별(필수)</div>
-        <div class="content-align">
-            <div class="btn-group" id="gender-group">
-                <button class="selection-btn" onclick="toggleSingle(this)" data-value="male">남성</button>
-                <button class="selection-btn" onclick="toggleSingle(this)" data-value="female">여성</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- 2. 코디 섹션 -->
+    <!-- 1. 코디 섹션 -->
     <div class="section">
-        <div class="page-title">2. 코디(필수)</div>
+        <div class="page-title">1. 코디(필수)</div>
         <div class="content-align">
 
             <!-- [BOX 1] 상의 & 하의 -->
@@ -126,7 +115,6 @@
                             <div class="slider-window">
                                 <div class="slider-track" id="track-outfit-onepiece" data-index="0">
                                     <div class="outfit-item" onclick="selectOutfit(this)" data-type="onepiece" data-value="dress"><div class="icon-box"><img src="{% static 'ui/images/dress.png' %}"></div><span>드레스</span></div>
-                                    <div class="outfit-item" onclick="selectOutfit(this)" data-type="onepiece" data-value="jumpsuit"><div class="icon-box"><img src="{% static 'ui/images/jumpsuit.png' %}"></div><span>점프수트</span></div>
                                 </div>
                             </div>
                             <button class="nav-btn" onclick="moveSlider('outfit-onepiece', 1)"><span class="material-icons">chevron_right</span></button>
@@ -162,9 +150,10 @@
         </div>
     </div>
 
-    <!-- 3. 계절 섹션 -->
+<!---------------------------------------------------------------->
+    <!-- 2. 계절 섹션 -->
     <div class="section">
-        <div class="page-title">3. 계절(필수)</div>
+        <div class="page-title">2. 계절(필수)</div>
         <div class="content-align">
             <div class="btn-group" id="season-group">
                 <button class="selection-btn" onclick="toggleSingle(this)" data-value="spring">봄</button>
@@ -174,10 +163,10 @@
             </div>
         </div>
     </div>
-
-    <!-- 4. 비선호 취향 섹션 (38개 향조 전체 포함) -->
+<!---------------------------------------------------------------->
+    <!-- 3. 비선호 취향 섹션 (38개 향조 전체 포함) -->
     <div class="section content-align">
-        <div class="section-title">4. 비선호 취향 (선택)</div>
+        <div class="page-title">3. 비선호 취향 (선택)</div>
         <p style="font-size: 13px; color: #999; margin-bottom: 15px;">카테고리를 클릭하여 싫어하는 향조를 선택하세요.</p>
 
         <!-- 카테고리 1: 상큼 & 시원 -->
@@ -288,7 +277,6 @@
 <script>
     // 전역 선택 상태 객체
     const selections = {
-        gender: null,
         top: {item: null, color: null},
         bottom: {item: null, color: null},
         onepiece: {item: null, color: null}
@@ -427,11 +415,9 @@
 
         if (isSelected) {
             el.classList.remove('active');
-            if(parent.id === 'gender-group') selections.gender = null;
         } else {
             parent.querySelectorAll('.selection-btn').forEach(b => b.classList.remove('active'));
             el.classList.add('active');
-            if(parent.id === 'gender-group') selections.gender = el.dataset.value;
         }
     }
 
@@ -448,50 +434,71 @@
 
     // 9. 최종 제출 로직
     function submitSelection() {
-        const genderBtn = document.querySelector('#gender-group .active');
-        const seasonBtn = document.querySelector('#season-group .active');
 
-        if (!genderBtn) { alert("성별을 선택해주세요!"); return; }
-        if (!seasonBtn) { alert("계절을 선택해주세요!"); return; }
 
-        // 선택된 이미지의 경로 수집 (img 태그의 src 속성)
-        const selectedTopImg = document.querySelector('#preview-top .preview-box.selected img')?.getAttribute('src');
-        const selectedBottomImg = document.querySelector('#preview-bottom .preview-box.selected img')?.getAttribute('src');
-        const selectedOnepieceImg = document.querySelector('#preview-onepiece .preview-box.selected img')?.getAttribute('src');
-
-        // 비선호 향조 수집
-        const dislikedAccords = Array.from(document.querySelectorAll('.accord-category .selection-btn.active'))
-            .map(btn => btn.dataset.value);
-
-        const requestData = {
-            gender: genderBtn.dataset.value,
-            season: seasonBtn.dataset.value,
-            disliked_accords: dislikedAccords,
-            top: selections.top.item,
-            top_color: selections.top.color,
-            top_img: selectedTopImg,
-            bottom: selections.bottom.item,
-            bottom_color: selections.bottom.color,
-            bottom_img: selectedBottomImg,
-            onepiece: selections.onepiece.item,
-            onepiece_color: selections.onepiece.color,
-            onepiece_img: selectedOnepieceImg
-        };
-
-        // API 전송
-        fetch('/api/user-input/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.getElementById('csrf_token').value
-            },
-            body: JSON.stringify(requestData)
-        })
-        .then(res => {
-            if (res.ok) window.location.href = "/result/";
-            else alert("데이터 저장 중 오류가 발생했습니다.");
-        })
-        .catch(err => console.error("제출 에러:", err));
+    // 1. 계절 선택 여부 확인
+    const seasonBtn = document.querySelector('#season-group .active');
+    if (!seasonBtn) {
+        alert("계절을 선택해주세요!");
+        return;
     }
+
+    // 2. 이미지 선택 여부 수집
+    const selectedTopImg = document.querySelector('#preview-top .preview-box.selected img')?.getAttribute('src');
+    const selectedBottomImg = document.querySelector('#preview-bottom .preview-box.selected img')?.getAttribute('src');
+    const selectedOnepieceImg = document.querySelector('#preview-onepiece .preview-box.selected img')?.getAttribute('src');
+
+    // 3. [추가] 코디 선택 여부 검증 로직
+    const isTwoPieceActive = !document.getElementById('group-2pc').classList.contains('disabled');
+    const isOnePieceActive = !document.getElementById('group-1pc').classList.contains('disabled');
+
+    // 검증 실행
+    if (isTwoPieceActive) {
+        // 상하의 모드인데 이미지를 둘 다 안 골랐거나 하나만 고른 경우
+        if (!selectedTopImg || !selectedBottomImg) {
+            alert("상의와 하의 코디 이미지를 모두 선택해주세요!");
+            return;
+        }
+    } else if (isOnePieceActive) {
+        // 원피스 모드인데 이미지를 안 고른 경우
+        if (!selectedOnepieceImg) {
+            alert("원피스 코디 이미지를 선택해주세요!");
+            return;
+        }
+    } else {
+        // 아예 아무것도 건드리지 않은 초기 상태인 경우
+        alert("원하시는 코디를 선택하고 이미지를 클릭해 주세요!");
+        return;
+    }
+
+    // 4. 모든 검증 통과 시 데이터 전송
+    const requestData = {
+        season: seasonBtn.dataset.value,
+        disliked_accords: Array.from(document.querySelectorAll('.accord-category .selection-btn.active')).map(b => b.dataset.value),
+        top: selections.top.item,
+        top_color: selections.top.color,
+        top_img: selectedTopImg,
+        bottom: selections.bottom.item,
+        bottom_color: selections.bottom.color,
+        bottom_img: selectedBottomImg,
+        onepiece: selections.onepiece.item,
+        onepiece_color: selections.onepiece.color,
+        onepiece_img: selectedOnepieceImg
+    };
+
+    fetch('/api/user-input/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.getElementById('csrf_token').value
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(res => {
+        if (res.ok) window.location.href = "/result/";
+        else alert("데이터 저장 중 오류가 발생했습니다.");
+    })
+    .catch(err => console.error("제출 에러:", err));
+}
 </script>
 {% endblock %}
