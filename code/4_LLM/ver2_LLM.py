@@ -14,10 +14,15 @@ perfume_classification = pd.read_csv("data/03_results/perfume/perfume_classifica
 perfume_color = pd.read_csv("data/03_results/perfume/perfume_color.csv")
 perfume_season = pd.read_csv("data/03_results/perfume/perfume_season.csv")
 
+
+###사용자 id 가정 
+user_id = 1
+
+
 # 추천 향수 3개의 LLM 입력 데이터 생성
 ## A) 사용자 
-def build_user_context(user_df: pd.DataFrame):
-    user = user_df.iloc[-1]
+def build_user_context(user_df: pd.DataFrame, user_id):
+    user = user_df[user_df["사용자_식별자"] == user_id].iloc[0]
 
     user_style_text = []
     if pd.notna(user["상의_색상"]):
@@ -100,7 +105,7 @@ def build_top3_llm_inputs(
     perfume_color,
     perfume_season
 ):
-    user_context = build_user_context(user_df)
+    user_context = build_user_context(user_df, user_id)
 
     llm_inputs = []
     for _, row in score_df.iterrows():
