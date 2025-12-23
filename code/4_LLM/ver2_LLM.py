@@ -18,7 +18,6 @@ perfume_season = pd.read_csv("data/03_results/perfume/perfume_season.csv")
 ###사용자 id 가정 
 user_id = 1
 
-
 # 추천 향수 3개의 LLM 입력 데이터 생성
 ## A) 사용자 
 def build_user_context(user_df: pd.DataFrame, user_id):
@@ -40,8 +39,9 @@ def build_user_context(user_df: pd.DataFrame, user_id):
         "disliked_accords": user["비선호_향조"]
     }
     
+    
 ## B) 향수 
-def build_llm_input_for_perfume(
+def build_perfume_context(
     score_row,
     perfume_df,
     perfume_classification,
@@ -55,10 +55,10 @@ def build_llm_input_for_perfume(
     accords = perfume_classification[perfume_classification["perfume_id"] == perfume_id].iloc[0]
     season_info = perfume_season[perfume_season["perfume_id"] == perfume_id].iloc[0]
 
-    # ✅ 1) 향 결 설명 (사람 언어)
+    # 1) 향 결 설명 (사람 언어)
     fragrance_desc = accords["fragrance"]
 
-    # ✅ 2) 계절 적합도 상위 2개 추출
+    # 2) 계절 적합도 상위 2개 추출
     season_scores = {
         "봄": season_info["spring"],
         "여름": season_info["summer"],
@@ -96,7 +96,8 @@ def build_llm_input_for_perfume(
 
         "review_summary": "(리뷰없음)"
     }
-## A+B) 종합
+    
+    ## A+B) 종합
 def build_top3_llm_inputs(
     score_df,
     user_df,
@@ -108,8 +109,14 @@ def build_top3_llm_inputs(
     user_context = build_user_context(user_df, user_id)
 
     llm_inputs = []
-    for _, row in score_df.iterrows():
-        llm_input = build_llm_input_for_perfume(
+    
+    # user_id 기준으로 score_df 필터링
+    score_df_user = score_df[score_df["user_id"] == user_id]
+    if score_df_user.empty:
+        raise ValueError(f"user_id {user_id}에 대한 score가 없습니다.")
+    
+    for _, row in score_df_user.iterrows():
+        llm_input = build_perfume_context(
             row,
             perfume_df,
             perfume_classification,
@@ -120,7 +127,6 @@ def build_top3_llm_inputs(
         llm_inputs.append(llm_input)
 
     return llm_inputs
-
 # LLM 호출하여 종합 추천 이유 생성
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
