@@ -35,7 +35,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from .serializers import UserInputSerializer, RecommendationResultSerializer
 from ui.models import Score, Perfume, TopBottom, Dress
-from .recommend.calculation_v2 import myscore_cal
+# from .recommend.calculation_v2 import myscore_cal #ver2
+from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
+
 from django.db import transaction
 from rest_framework.renderers import JSONRenderer
 from .recommend.ver2_LLM import get_llm_recommendation
@@ -161,7 +163,7 @@ from rest_framework import status
 from django.db import transaction
 from .serializers import UserInputSerializer
 from ui.models import UserInfo, Score, TopBottom, Dress, ClothesColor
-from .recommend.calculation_v2 import myscore_cal  # 추천 엔진 임포트
+
 
 
 class UserInputView(APIView):
