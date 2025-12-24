@@ -35,9 +35,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from .serializers import UserInputSerializer, RecommendationResultSerializer
 from ui.models import Score, Perfume, TopBottom, Dress
-from ui.recommend.calculation import get_user_data, recommend_perfumes
+from .recommend.calculation_v2 import myscore_cal
 from django.db import transaction
 from rest_framework.renderers import JSONRenderer
+from .recommend.ver2_LLM import get_llm_recommendation
 
 # =============================================================
 # 1. 이미지 데이터 조회 API
@@ -154,7 +155,23 @@ class PerfumeClassificationViewSet(viewsets.ModelViewSet):
 
 # ui/api_views.py
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from .serializers import UserInputSerializer
+from ui.models import UserInfo, Score, TopBottom, Dress, ClothesColor
+from .recommend.calculation_v2 import myscore_cal  # 추천 엔진 임포트
+
+
 class UserInputView(APIView):
+    """
+    [기능]
+    1. 사용자가 선택한 [아이템 + 색상] 조합이 실제 DB(TopBottom/Dress)에 존재하는지 엄격하게 검사합니다.
+    2. 임의의 기본값(면, 노멀 등)을 생성하지 않으며, 매칭되는 데이터가 없으면 에러를 발생시킵니다.
+    3. 모든 데이터가 완벽할 때만 UserInfo를 저장하고 자동으로 myscore_cal을 호출합니다.
+    """
+
     def post(self, request):
         serializer = UserInputSerializer(data=request.data)
 
@@ -164,7 +181,7 @@ class UserInputView(APIView):
         data = serializer.validated_data
 
         try:
-            # ... (중략: map_item, map_color 매핑 로직은 동일) ...
+            # 영문 입력 -> 국문 DB 값 매핑 테이블
             map_item = {
                 'blouse': '블라우스', 'tshirt': '티셔츠', 'knit': '니트웨어', 'shirt': '셔츠', 'sleeveless': '탑',
                 'hoodie': '후드티', 'sweatshirt': '맨투맨', 'bratop': '브라탑',
@@ -182,55 +199,104 @@ class UserInputView(APIView):
             }
 
             final_season = data['season']
-            dislikes_list = data.get('disliked_accords', [])
-            dislikes_str = ", ".join(dislikes_list) if dislikes_list else None
+            dislikes_str = ", ".join(data.get('disliked_accords', [])) if data.get('disliked_accords') else None
 
-            # [핵심 수정] 시리얼라이저에서 넘겨준 이미지 경로 꺼내오기
-            top_img_url = data.get('top_img')
-            bottom_img_url = data.get('bottom_img')
-            onepiece_img_url = data.get('onepiece_img')
-
-            # ... (중략: FK 객체 찾는 로직 동일) ...
             user_top_obj = None
             user_bottom_obj = None
             user_dress_obj = None
 
-            if data.get('top') and data.get('bottom'):
-                top_color_obj, _ = ClothesColor.objects.get_or_create(color=data['top_color'])
-                user_top_obj, _ = TopBottom.objects.get_or_create(top_category=data['top'], top_color=top_color_obj, defaults={'style': 'basic'})
-                bottom_color_obj, _ = ClothesColor.objects.get_or_create(color=data['bottom_color'])
-                user_bottom_obj, _ = TopBottom.objects.get_or_create(bottom_category=data['bottom'], bottom_color=bottom_color_obj, defaults={'style': 'basic'})
-            elif data.get('onepiece'):
-                dress_color_obj, _ = ClothesColor.objects.get_or_create(color=data['onepiece_color'])
-                user_dress_obj, _ = Dress.objects.get_or_create(sub_style=data['onepiece'], dress_color=dress_color_obj, defaults={'style': 'basic'})
+            with transaction.atomic():
+                # --- [A] 투피스(상의+하의) 검사 ---
+                if data.get('top') and data.get('bottom'):
+                    top_color_kr = map_color.get(data.get('top_color'))
+                    bottom_color_kr = map_color.get(data.get('bottom_color'))
 
-            # [핵심 수정] UserInfo 저장 시 이미지 필드 명시
-            new_user_info = UserInfo.objects.create(
-                season=final_season,
-                disliked_accord=dislikes_str,
-                top_id=user_top_obj,
-                bottom_id=user_bottom_obj,
-                dress_id=user_dress_obj,
+                    # 색상 객체 조회 (기본 데이터이므로 get 사용)
+                    top_color_obj = ClothesColor.objects.get(color=top_color_kr)
+                    bottom_color_obj = ClothesColor.objects.get(color=bottom_color_kr)
 
-                # 아래 이미지 경로 저장 부분이 누락되어 있었습니다!
-                top_img=top_img_url,
-                bottom_img=bottom_img_url,
-                dress_img=onepiece_img_url,
+                    # [Strict] DB에서 해당 카테고리와 색상을 가진 상의가 있는지 찾기
+                    top_cat_kr = map_item.get(data['top'])
+                    user_top_obj = TopBottom.objects.filter(
+                        top_category=top_cat_kr,
+                        top_color=top_color_obj
+                    ).first()
 
-                top_category=map_item.get(data.get('top')),
-                top_color=map_color.get(data.get('top_color')),
-                bottom_category=map_item.get(data.get('bottom')),
-                bottom_color=map_color.get(data.get('bottom_color')),
-                dress_color=map_color.get(data.get('onepiece_color'))
-            )
+                    # [Strict] DB에서 해당 카테고리와 색상을 가진 하의가 있는지 찾기
+                    bottom_cat_kr = map_item.get(data['bottom'])
+                    user_bottom_obj = TopBottom.objects.filter(
+                        bottom_category=bottom_cat_kr,
+                        bottom_color=bottom_color_obj
+                    ).first()
 
-            return Response({"message": "저장 성공!", "user_id": new_user_info.user_id}, status=status.HTTP_201_CREATED)
+                    # 데이터가 없으면 에러 발생 (임의 생성 안 함)
+                    if not user_top_obj or not user_bottom_obj:
+                        missing = []
+                        if not user_top_obj: missing.append(f"상의({top_cat_kr}-{top_color_kr})")
+                        if not user_bottom_obj: missing.append(f"하의({bottom_cat_kr}-{bottom_color_kr})")
+                        raise ValueError(f"❌ [데이터 없음] 선택하신 {', '.join(missing)} 데이터가 의류 DB에 존재하지 않습니다.")
 
+                # --- [B] 원피스 검사 ---
+                elif data.get('onepiece'):
+                    # 1. 프론트에서 보낸 색상 이름을 한글로 변환 (예: 'pink' -> '핑크')
+                    onepiece_color_kr = map_color.get(data.get('onepiece_color'))
+
+                    # 2. ClothesColor 테이블에서 색상 객체 조회
+                    try:
+                        dress_color_obj = ClothesColor.objects.get(color=onepiece_color_kr)
+                    except ClothesColor.DoesNotExist:
+                        raise ValueError(f"❌ DB에 '{onepiece_color_kr}' 색상 정보가 없습니다.")
+
+                    # 3. [핵심 수정] 서브스타일 명칭('원피스')을 따지지 않고, 해당 색상의 원피스 데이터를 조회
+                    user_dress_obj = Dress.objects.filter(
+                        dress_color=dress_color_obj
+                    ).first()
+
+                    # 4. 만약 해당 색상의 원피스가 DB에 아예 없다면 에러 발생
+                    if not user_dress_obj:
+                        raise ValueError(
+                            f"❌ [데이터 없음] 현재 DB에 '{onepiece_color_kr}' 색상의 원피스 데이터가 존재하지 않습니다.")
+
+                # --- [C] UserInfo 생성 ---
+                new_user_info = UserInfo.objects.create(
+                    season=final_season,
+                    disliked_accord=dislikes_str,
+                    top_id=user_top_obj,
+                    bottom_id=user_bottom_obj,
+                    dress_id=user_dress_obj,
+                    top_img=data.get('top_img'),
+                    bottom_img=data.get('bottom_img'),
+                    dress_img=data.get('onepiece_img'),
+                    top_category=map_item.get(data.get('top')),
+                    top_color=map_color.get(data.get('top_color')),
+                    bottom_category=map_item.get(data.get('bottom')),
+                    bottom_color=map_color.get(data.get('bottom_color')),
+                    dress_color=map_color.get(data.get('onepiece_color'))
+                )
+
+                # --- [D] 자동 추천 계산 실행 ---
+                print(f"🔄 [Strict 자동 추천] 사용자 ID: {new_user_info.user_id}")
+                top3_scores = myscore_cal(new_user_info.user_id)
+
+                # 기존 점수 삭제 및 새 점수 저장
+                Score.objects.filter(user=new_user_info).delete()
+                for s in top3_scores:
+                    s.save()
+
+            return Response({
+                "message": "코디 저장 및 추천 완료",
+                "user_id": new_user_info.user_id,
+                "top3": [s.perfume.perfume_name for s in top3_scores]
+            }, status=status.HTTP_201_CREATED)
+
+        except ClothesColor.DoesNotExist:
+            return Response({"error": "DB에 해당 색상 정보가 없습니다."}, status=400)
+        except ValueError as ve:
+            return Response({"error": str(ve)}, status=400)  # 데이터 없음 에러 처리
         except Exception as e:
             import traceback
             traceback.print_exc()
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class UserOutfitAPIView(APIView):
     """
@@ -254,57 +320,121 @@ class UserOutfitAPIView(APIView):
         return Response(data, status=status.HTTP_200_OK)
 
 
-# 2) 추천 알고리즘 점수 계산 및 score 테이블 저장 api
-class RecommendationView(APIView):
-    renderer_classes = [JSONRenderer]
+class ScoreView(APIView):
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        print(f"DEBUG: ScoreView 호출됨, user_id={user_id}")
 
-    def get(self, request):
-        user_id = request.query_params.get("user_id")
-        # ... (중략: user_id 체크 로직) ...
-
-        try:
-            data = get_user_data(user_id)
-
-            # 중요: recommend_perfumes 호출 시 인자 이름을 calculation.py의 정의와 일치시킴
-            results = recommend_perfumes(
-                user_info=[data],
-                perfume=data["perfumes"],  # get_user_data에서 만든 리스트
-                perfume_classification=list(PerfumeClassification.objects.all().values("perfume_id", "fragrance")),
-                perfume_season=list(
-                    PerfumeSeason.objects.all().values("perfume_id", "spring", "summer", "fall", "winter")),
-                상의_하의=list(TopBottom.objects.all().values()),
-                원피스=list(Dress.objects.all().values()),
-                clothes_color=data["clothes_color"],
-                perfume_color=data["perfume_color"],
+        if not user_id:
+            return Response(
+                {"error": "user_id는 필수입니다."},
+                status=400
             )
 
-            print(f"DEBUG: 계산된 결과 개수 = {len(results)}")  # 터미널 확인용
+        try:
+            user_id = int(user_id)
 
-            if not results:
-                return Response({"message": "추천 결과가 없습니다."}, status=200)
+            # 1️⃣ 점수 계산 (Top3 Score 객체 반환)
+            score_objects = myscore_cal(user_id)
+            print("🔥 생성된 Score 객체 수:", len(score_objects))
 
-            # 기존 데이터 먼저 삭제
-            Score.objects.all().delete()
+            if not score_objects:
+                return Response(
+                    {"error": "생성된 score가 없습니다."},
+                    status=400
+                )
 
-            # 결과 저장 (update_or_create 사용)
+            print(
+                "🏆 저장될 Top3 myscore:",
+                [s.myscore for s in score_objects]
+            )
+
+            # 2️⃣ DB 저장
+            # with transaction.atomic():
+            #     deleted_count, _ = Score.objects.filter(
+            #         user__id=user_id
+            #     ).delete()
+            #     print("🧹 삭제된 기존 score 수:", deleted_count)
+            #
+            #     Score.objects.bulk_create(score_objects)
+            #     print("✅ bulk_create 완료 (Top3만 저장)")
             with transaction.atomic():
-                for res in results:
-                    Score.objects.update_or_create(
-                        perfume_id=res["perfume_id"],  # FK 객체 직접 할당 또는 ID
-                        defaults={
-                            "season_score": res["season_score"],
-                            "color_score": res["color_score"],
-                            "style_score": res["style_score"],
-                            "myscore": res["myscore"]
-                        }
-                    )
+                deleted_count, _ = Score.objects.filter(user_id=user_id).delete()
+                print("🧹 삭제된 기존 score 수:", deleted_count)
 
-            return Response({"results": results}, status=status.HTTP_201_CREATED)
+                for s in score_objects:
+                    s.save()
+                    print("💾 저장됨:", s.user_id, s.perfume_id, s.myscore)
+
+
+            return Response(
+                {
+                    "message": "추천 완료",
+                    "count": len(score_objects),
+                    "top3_myscore": [s.myscore for s in score_objects],
+                },
+                status=200
+            )
 
         except Exception as e:
             import traceback
-            traceback.print_exc()  # 에러가 나면 터미널에 상세 내용을 찍음
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            traceback.print_exc()
+
+            return Response(
+                {"error": str(e)},
+                status=500
+            )
+# 2) 추천 알고리즘 점수 계산 및 score 테이블 저장 api
+# class RecommendationView(APIView):
+#     renderer_classes = [JSONRenderer]
+#
+#     def get(self, request):
+#         user_id = request.query_params.get("user_id")
+#         # ... (중략: user_id 체크 로직) ...
+#
+#         try:
+#             data = get_user_data(user_id)
+#
+#             # 중요: recommend_perfumes 호출 시 인자 이름을 calculation.py의 정의와 일치시킴
+#             results = recommend_perfumes(
+#                 user_info=[data],
+#                 perfume=data["perfumes"],  # get_user_data에서 만든 리스트
+#                 perfume_classification=list(PerfumeClassification.objects.all().values("perfume_id", "fragrance")),
+#                 perfume_season=list(
+#                     PerfumeSeason.objects.all().values("perfume_id", "spring", "summer", "fall", "winter")),
+#                 상의_하의=list(TopBottom.objects.all().values()),
+#                 원피스=list(Dress.objects.all().values()),
+#                 clothes_color=data["clothes_color"],
+#                 perfume_color=data["perfume_color"],
+#             )
+#
+#             print(f"DEBUG: 계산된 결과 개수 = {len(results)}")  # 터미널 확인용
+#
+#             if not results:
+#                 return Response({"message": "추천 결과가 없습니다."}, status=200)
+#
+#             # 기존 데이터 먼저 삭제
+#             Score.objects.all().delete()
+#
+#             # 결과 저장 (update_or_create 사용)
+#             with transaction.atomic():
+#                 for res in results:
+#                     Score.objects.update_or_create(
+#                         perfume_id=res["perfume_id"],  # FK 객체 직접 할당 또는 ID
+#                         defaults={
+#                             "season_score": res["season_score"],
+#                             "color_score": res["color_score"],
+#                             "style_score": res["style_score"],
+#                             "myscore": res["myscore"]
+#                         }
+#                     )
+#
+#             return Response({"results": results}, status=status.HTTP_201_CREATED)
+#
+#         except Exception as e:
+#             import traceback
+#             traceback.print_exc()  # 에러가 나면 터미널에 상세 내용을 찍음
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -340,26 +470,86 @@ class RecommendationResultAPIView(APIView):
 
 #향수 이미지 api
 
+# class PerfumeTop3ImageAPI(APIView):
+#     renderer_classes = [JSONRenderer]
+#
+#     def get(self, request):
+#         # 1. 가장 최근의 사용자 가져오기
+#         last_user = UserInfo.objects.last()
+#         if not last_user:
+#             return Response({"error": "No user info"}, status=404)
+#
+#         # 2. [수정] 강제 지정 [0, 1, 2]를 지우고 진짜 DB 쿼리 실행
+#         # 해당 유저의 점수 데이터를 가져옴
+#         top3_scores = Score.objects.filter(user=last_user).select_related('perfume').order_by('-myscore')[:3]
+#
+#         results = []
+#         for score in top3_scores:
+#             pid = score.perfume.perfume_id
+#             results.append({
+#                 "perfume_id": pid,
+#                 "image_url": f"/static/ui/perfume_images/{pid}.jpg",
+#                 "perfume_name": score.perfume.perfume_name,
+#                 "brand": score.perfume.brand,
+#                 "myscore": score.myscore,
+#                 "gender": score.perfume.gender
+#             })
+#
+#         return Response(results, status=200)
+
 class PerfumeTop3ImageAPI(APIView):
-    """
-    추천된 상위 3개 향수의 이미지 경로만 반환하는 API
-    """
     renderer_classes = [JSONRenderer]
 
     def get(self, request):
-        # 1. 나중에 Score가 고쳐지면 아래 주석을 해제하세요.
-        # top3_ids = list(Score.objects.order_by('-myscore').values_list('perfume_id', flat=True)[:3])
+        # 1. 테스트를 위해 특정 유저(예: 5번)로 고정하거나, 마지막 유저를 선택
+        # target_user = UserInfo.objects.get(user_id=5) # 수동 데이터를 넣은 번호로 고정할 때
+        target_user = UserInfo.objects.last()  # 가장 최근 유저를 타겟팅할 때
 
-        # 2. 지금은 테스트를 위해 ID 0, 1, 2번을 강제로 지정합니다.
-        top3_ids = [0, 1, 2]
+        if not target_user:
+            return Response({"error": "유저 정보가 없습니다."}, status=404)
+
+        # 2. Score 테이블에서 해당 유저의 Top 3 가져오기
+        # select_related를 사용하여 성능을 최적화합니다.
+        top3_scores = Score.objects.filter(user=target_user).select_related(
+            'perfume', 'perfume__mainaccord1', 'perfume__mainaccord2', 'perfume__mainaccord3'
+        ).order_by('-myscore')[:3]
 
         results = []
-        for pid in top3_ids:
-            # 폴더 구조에 맞춰 경로 생성: /static/ui/perfume/0.jpg
-            img_path = f"/static/ui/perfume_images/{pid}.jpg"
+        for score in top3_scores:
+            p = score.perfume
+
+            # 어코드(향조) 리스트 생성
+            accords = []
+            if p.mainaccord1: accords.append(p.mainaccord1.mainaccord)
+            if p.mainaccord2: accords.append(p.mainaccord2.mainaccord)
+            if p.mainaccord3: accords.append(p.mainaccord3.mainaccord)
+
             results.append({
-                "perfume_id": pid,
-                "image_url": img_path
+                "perfume_id": p.perfume_id,
+                "perfume_name": p.perfume_name,
+                "brand": p.brand,
+                "gender": p.gender if p.gender else "Unisex",
+                "accords": accords,
+                "myscore": score.myscore,
+                "image_url": f"/static/ui/perfume_images/{p.perfume_id}.jpg"  # 폴더명 확인!
             })
 
         return Response(results, status=200)
+
+
+class RecommendationSummaryAPIView(APIView):
+    renderer_classes = [JSONRenderer]
+
+    def get(self, request):
+
+        target_user_id = UserInfo.objects.last().user_id
+
+        try:
+            # 2. 강제로 지정한 ID를 LLM 함수에 전달
+            summary_text = get_llm_recommendation(target_user_id)
+            return Response({"summary": summary_text}, status=200)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({"summary": "분석 중 오류가 발생했습니다."}, status=500)

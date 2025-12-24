@@ -71,6 +71,7 @@ class Dress(models.Model):
     dress_sleeve_length = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_소매기장")
     dress_material = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_소재")
     dress_print = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_프린트")
+    dress_neckline = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_넥라인")
     dress_fit = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_핏")
     dress_detail = models.CharField(max_length=255, null=True, blank=True, db_column="원피스_디테일")
 
@@ -212,3 +213,23 @@ class Score(models.Model):
 
     def __str__(self):
         return f"Score ID:{self.id} (User:{self.user_id} - Perfume:{self.perfume_id})"
+
+
+class PerfumeFeedback(models.Model):
+
+    feedback_id = models.AutoField(primary_key=True, db_column="feedback_id")
+    # 어떤 사용자가 남겼는지 (UserInfo와 연결)
+    user = models.ForeignKey('UserInfo', on_delete=models.CASCADE, db_column="user_id")
+    # 어떤 향수에 대해 남겼는지
+    perfume = models.ForeignKey('Perfume', on_delete=models.CASCADE, db_column="perfume_id")
+
+    # 1: 좋음(👍), -1: 별로임(👎)
+    rating = models.IntegerField(db_column="rating")
+
+    # 선택한 태그들을 쉼표로 구분하여 저장 (예: "코디와 안 어울림, 향이 너무 강함")
+    selected_tags = models.CharField(max_length=255, null=True, blank=True, db_column="selected_tags")
+
+    created_at = models.DateTimeField(auto_now_add=True, db_column="created_at")
+
+    class Meta:
+        db_table = "perfume_feedback"

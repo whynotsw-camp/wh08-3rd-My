@@ -8,7 +8,7 @@ class Command(BaseCommand):
     help = '원피스.csv 파일을 읽어 Dress 테이블에 저장합니다.'
 
     def handle(self, *args, **kwargs):
-        csv_path = 'C:\PROJ_django\원피스.csv'
+        csv_path = Path(settings.BASE_DIR)/'원피스.csv'
 
         try:
             # 1. CSV 읽기 (인코딩 자동 감지)
@@ -59,6 +59,7 @@ class Command(BaseCommand):
                             'dress_color': color_obj,  # FK
                             'dress_material': row.get('원피스_소재'),
                             'dress_print': row.get('원피스_프린트'),
+                            'dress_neckline': row.get("원피스_넥라인"),
                             'dress_fit': row.get('원피스_핏'),
                             'dress_detail': row.get('원피스_디테일'),
                         }
