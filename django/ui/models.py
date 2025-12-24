@@ -233,3 +233,36 @@ class PerfumeFeedback(models.Model):
 
     class Meta:
         db_table = "perfume_feedback"
+
+
+
+class UserSmellingInput(models.Model):
+    rate_id = models.AutoField(primary_key=True, db_column="rate_id")
+    smelling_user_id=models.IntegerField(null=True, blank=True, db_column="smelling_user_id")
+
+    top_id = models.ForeignKey(TopBottom, on_delete=models.SET_NULL, related_name="smelling_user_tops", null=True, blank=True, db_column="상의_식별자")
+    top_color = models.CharField(max_length=100, null=True, blank=True, db_column="상의_색상")
+    top_category = models.CharField(max_length=100, null=True, blank=True, db_column="상의_카테고리")
+    top_img = models.CharField(max_length=500, null=True, blank=True, db_column="상의_이미지_경로")
+
+    # 하의 관련
+    bottom_id = models.ForeignKey(TopBottom, on_delete=models.SET_NULL, related_name="smelling_user_bottoms", null=True, blank=True, db_column="하의_식별자")
+    bottom_color = models.CharField(max_length=100, null=True, blank=True, db_column="하의_색상")
+    bottom_category = models.CharField(max_length=100, null=True, blank=True, db_column="하의_카테고리")
+    bottom_img = models.CharField(max_length=500, null=True, blank=True, db_column="하의_이미지_경로")
+
+    # 원피스 관련
+    dress_id = models.ForeignKey(Dress, on_delete=models.SET_NULL, related_name="smelling_user_dresses", null=True, blank=True, db_column="원피스_식별자")
+    dress_color = models.CharField(max_length=100, null=True, blank=True, db_column="원피스_색상")
+    dress_img = models.CharField(max_length=500, null=True, blank=True, db_column="원피스_이미지_경로")
+
+    # 공통 설정
+    season = models.CharField(max_length=50, null=True, blank=True, db_column="계절")
+    perfume_id = models.ForeignKey(Perfume, null=True, blank=True, on_delete=models.SET_NULL, related_name="smelling_user_perfume", db_column="perfume_id")
+    brand = models.CharField(max_length=100, null=True, blank=True, db_column="Brand")
+    perfume_img_url = models.CharField(max_length=500, null=True, blank=True, db_column="perfume_img_url")
+    smelling_rate=models.IntegerField(null=True, blank=True, db_column="smelling_rate")
+
+    class Meta:
+        db_table = "user_smelling_input"
+        app_label = 'ui'
