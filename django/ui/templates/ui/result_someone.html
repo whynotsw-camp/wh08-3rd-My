@@ -56,20 +56,22 @@
 
             <!-- 오른쪽: 카드 미리보기 -->
             <div class="gift-preview-area" style="flex: 2; position: relative;">
-                <div class="card-box" id="card-content" style="background: #fdfaf6; padding: 30px; border-radius: 15px; border: 1px solid #e0d5c5; min-height: 120px; line-height: 1.8; color: #5d554a; font-style: italic;">
-                    "너의 분위기를 닮은 향, 선물할게."<br>
-                    "첫 만남이 더 기억나면 좋겠어서."<br>
-                    "말보다 향이 먼저 마음을 전해줄 수 있으니까."
+            <!-- id="card-content" 내부의 하드코딩된 텍스트를 제거하거나 초기 메시지로 변경 -->
+            <div class="card-box" id="card-content" style="background: #fdfaf6; padding: 30px; border-radius: 15px; border: 1px solid #e0d5c5; min-height: 120px; line-height: 1.8; color: #5d554a; font-style: italic;">
+                "선물 버튼을 클릭하여 맞춤 문구를 생성해보세요."
                 </div>
-                <span class="material-icons refresh-icon" style="position: absolute; bottom: 10px; right: 10px; color: #9c8cc1; cursor: pointer;">cached</span>
-            </div>
-        </div>
-    </div>
+
+            <!-- 리롤 아이콘에 onclick 추가 및 회전 애니메이션을 위한 클래스 확인 -->
+                <span class="material-icons refresh-icon"
+                onclick="rerollMessage()"
+                style="position: absolute; bottom: 10px; right: 10px; color: #9c8cc1; cursor: pointer; transition: transform 0.5s;">
+          cached
+    </span>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. [코디 이미지] 로드
+    // 1. [코디 이미지] 로드 - 상하의 또는 원피스 이미지 배치
     fetch('/api/user-outfit/')
         .then(res => res.json())
         .then(data => {
@@ -88,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-    // 2. [향수 정보 및 이미지] 로드
+    // 2. [향수 정보 및 이미지] 로드 - TOP3 카드 생성 및 피드백 기능 바인딩
     fetch('/api/perfume-top3-images/')
         .then(res => res.json())
         .then(data => {
@@ -103,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             data.forEach((item) => {
                 const accordText = item.accords.join(' · ');
-                const formattedScore = parseFloat(item.myscore).toFixed(2);
+                const formattedScore = parseFloat(item.myscore).toFixed(3);
                 const pId = item.perfume_id;
 
                 const cardHtml = `
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-    // 3. [AI 요약] 로드
+    // 3. [AI 요약] 로드 - For Someone 전용 요약 텍스트
     fetch('/api/someone-summary/')
         .then(res => res.json())
         .then(data => {
@@ -151,10 +153,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 summaryBox.innerHTML = data.summary.replace(/\n/g, '<br>');
             }
         });
+
+    // 4. [초기 실행] 기프트 카드 첫 문구 로드 (기본 '짧은 문구' 활성화 상태일 때)
+    const initialBtn = document.querySelector('.gift-options .selection-btn.active');
+    if (initialBtn) {
+        // 페이지 로드 시 처음 한 번은 자동으로 문구 생성
+        const type = initialBtn.innerText.includes('짧은') ? '짧은' : '긴';
+        loadGiftMessageAPI(type);
+    }
 });
 
-// Gift Card 전용 로직
+/**
+ * Gift Card 전용 로직: 버튼 클릭 시 호출
+ */
 function toggleGiftMessage(element) {
+    // 1. 버튼 활성화 시각적 처리
     const parent = element.parentElement;
     const siblings = parent.getElementsByClassName('selection-btn');
     for (let btn of siblings) {
@@ -164,26 +177,83 @@ function toggleGiftMessage(element) {
     element.classList.add('active');
     element.innerText = '✓ ' + element.innerText;
 
+    // 2. 메시지 타입 판별 후 API 호출
+    const messageType = element.innerText.includes('짧은') ? '짧은' : '긴';
+    loadGiftMessageAPI(messageType);
+}
+
+/**
+ * Gift Card API 호출 공통 함수 (리롤/버튼클릭 공용)
+ */
+function loadGiftMessageAPI(messageType) {
     const cardBox = document.getElementById('card-content');
-    if (element.innerText.includes('짧은')) {
-        cardBox.innerHTML = `"너의 분위기를 닮은 향, 선물할게."<br>"첫 만남이 더 기억나면 좋겠어서."<br>"말보다 향이 먼저 마음을 전해줄 수 있으니까."`;
-    } else {
-        cardBox.innerHTML = `"평소 너의 이미지와 잘 어울릴 것 같아서 골랐어.<br>이 향기가 너의 하루를 더 특별하게 만들어주길 바라.<br>오늘도 좋은 하루 보내!"<br><br>"지나가다 우연히 맡은 향이 너랑 너무 찰떡이라<br>그냥 지나칠 수가 없더라. 부담 갖지 말고 편하게 써줘!"`;
+    if (!cardBox) return;
+
+    // 로딩 표시 및 투명도 조절
+    cardBox.style.opacity = "0.6";
+    cardBox.innerHTML = "마음을 담은 문구를 작성 중입니다...";
+
+    fetch(`/api/gift-message/?type=${encodeURIComponent(messageType)}`)
+        .then(res => res.json())
+        .then(data => {
+            cardBox.style.opacity = "1";
+            if (data.messages && data.messages.length > 0) {
+                // 가져온 배열을 따옴표와 함께 <br>로 합쳐서 출력
+                cardBox.innerHTML = data.messages.map(m => `"${m}"`).join('<br><br>');
+            } else {
+                cardBox.innerHTML = "생성된 문구가 없습니다. 다시 시도해 주세요.";
+            }
+        })
+        .catch(() => {
+            cardBox.style.opacity = "1";
+            cardBox.innerHTML = "문구 생성에 실패했습니다. 다시 시도해 주세요.";
+        });
+}
+
+/**
+ * 리롤 아이콘(cached) 클릭 시 동작
+ */
+function rerollGiftMessage() {
+    const refreshIcon = document.querySelector('.gift-preview-area .refresh-icon');
+
+    // 1. 아이콘 회전 애니메이션
+    if (refreshIcon) {
+        refreshIcon.style.transform = 'rotate(360deg)';
+        setTimeout(() => { refreshIcon.style.transform = 'rotate(0deg)'; }, 500);
+    }
+
+    // 2. 현재 활성화된 버튼(짧은/긴) 확인 후 다시 호출
+    const activeBtn = document.querySelector('.gift-options .selection-btn.active');
+    if (activeBtn) {
+        const type = activeBtn.innerText.includes('짧은') ? '짧은' : '긴';
+        loadGiftMessageAPI(type);
     }
 }
 
-// 피드백 관련 함수
+// 아이콘 클릭 이벤트 리스너 (HTML에 onclick="rerollGiftMessage()"이 없을 경우를 대비)
+const refreshBtn = document.querySelector('.gift-preview-area .refresh-icon');
+if (refreshBtn) {
+    refreshBtn.onclick = rerollGiftMessage;
+}
+
+/**
+ * 피드백 관련 함수 (기능 유지)
+ */
 function toggleTagBox(pId) {
     const box = document.getElementById(`tag-box-${pId}`);
     if (box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
 }
+
 function handleLike(pId) {
     alert("피드백 감사합니다!");
-    document.getElementById(`feedback-area-${pId}`).innerHTML = "<p class='thanks-msg'>피드백이 반영되었습니다! ✨</p>";
+    const area = document.getElementById(`feedback-area-${pId}`);
+    if (area) area.innerHTML = "<p class='thanks-msg'>피드백이 반영되었습니다! ✨</p>";
 }
+
 function submitFeedback(pId) {
     alert("소중한 의견 감사합니다!");
-    document.getElementById(`feedback-area-${pId}`).innerHTML = "<p class='thanks-msg'>피드백이 반영되었습니다! ✨</p>";
+    const area = document.getElementById(`feedback-area-${pId}`);
+    if (area) area.innerHTML = "<p class='thanks-msg'>피드백이 반영되었습니다! ✨</p>";
 }
 </script>
 {% endblock %}

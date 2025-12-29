@@ -128,7 +128,7 @@ class RecommendationResultSerializer(serializers.ModelSerializer):
 
     def get_myscore(self, obj):
         # 소수점 첫째 자리까지 반올림 (예: 141.7)
-        return round(float(obj.myscore), 1)
+        return round(float(obj.myscore), 3)
 
     def get_top_season(self, obj):
         try:

@@ -36,22 +36,20 @@ from rest_framework import status
 from .serializers import UserInputSerializer, RecommendationResultSerializer
 from ui.models import Score, Perfume, TopBottom, Dress
 # from .recommend.calculation_v2 import myscore_cal #ver2
-<<<<<<< HEAD
-#from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
-from .recommend.calculation_v4 import myscore_cal #ver4
-=======
+
+
 # from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
 from .recommend.calculation_v4 import myscore_cal #ver4
 
 
->>>>>>> a94c8ee635b468c25d43e13f178a47c53216683e
+
 from django.db import transaction
 from rest_framework.renderers import JSONRenderer
 
 #LLM 관련
 from .recommend.for_me_LLM import get_llm_recommendation
 from .recommend.for_someone_LLM import get_someone_recommendation
-from .recommend.gift_message_LLM import get_gift_message_recommendation
+from .recommend.gift_message_LLM import get_someone_gift_message
 
 # =============================================================
 # 1. 이미지 데이터 조회 API
@@ -546,7 +544,7 @@ class PerfumeTop3ImageAPI(APIView):
                 "brand": p.brand,
                 "gender": p.gender if p.gender else "Unisex",
                 "accords": accords,
-                "myscore": score.myscore,
+                "myscore": float(score.myscore),
                 "image_url": f"/static/ui/perfume_images/{p.perfume_id}.jpg"  # 폴더명 확인!
             })
 
@@ -814,26 +812,35 @@ class SomeoneSummaryAPIView(APIView):
         except Exception as e:
             return Response({"summary": "분석 중 오류가 발생했습니다."}, status=500)
 
+
 class GiftMessageAPIView(APIView):
-    """
-    기프트 카드 문구 생성 API
-    """
     renderer_classes = [JSONRenderer]
 
     def get(self, request):
         last_user = UserInfo.objects.last()
-        if not last_user: return Response({"message": "데이터 없음"}, status=404)
+        if not last_user:
+            return Response({"messages": ["데이터가 없습니다."]}, status=404)
 
-        # 세션에서 정보 가져오기
+        # 1. 세션에서 선물 정보 가져오기
         recipient = request.session.get('recipient') or "소중한 분"
         situation = request.session.get('situation') or "특별한 날"
-        # 쿼리 파라미터로 '짧은' 또는 '긴'을 받음
-        message_type = request.query_params.get('type', '짧은')
+
+        # 2. 쿼리 파라미터에서 메시지 타입 가져오기
+        msg_type = request.query_params.get('type', '짧은')
 
         try:
-            raw_text = get_gift_message_recommendation(last_user.user_id, recipient, situation, message_type)
-            # '||' 구분자로 잘라서 배열로 보냄
-            messages = [m.strip() for m in raw_text.split('||')]
+            from .recommend.gift_message_LLM import get_someone_gift_message
+
+            # [핵심 수정] last_user.user_id를 첫 번째 인자로 전달합니다.
+            messages = get_someone_gift_message(
+                last_user.user_id,
+                recipient,
+                situation,
+                msg_type
+            )
+
             return Response({"messages": messages}, status=200)
-        except:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()  # 터미널에 상세 에러 출력
             return Response({"messages": ["마음을 담아 선물하세요."]}, status=500)

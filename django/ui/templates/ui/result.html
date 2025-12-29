@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             data.forEach((item, index) => {
                 const accordText = item.accords.join(' · ');
-                const formattedScore = parseFloat(item.myscore).toFixed(2);
+                const formattedScore = parseFloat(item.myscore).toFixed(3);
                 const pId = item.perfume_id;
 
                 const cardHtml = `

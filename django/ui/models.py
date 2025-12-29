@@ -266,3 +266,12 @@ class UserSmellingInput(models.Model):
     class Meta:
         db_table = "user_smelling_input"
         app_label = 'ui'
+
+class Weight(models.Model):
+    weight_id = models.AutoField(primary_key=True)
+    style_weight = models.FloatField(default=1.0, verbose_name="style_weight")
+    color_weight = models.FloatField(default=1.0, verbose_name="color_weight")
+    season_weight = models.FloatField(default=1.0, verbose_name="season_weight")
+
+    class Meta:
+        db_table = 'weight'
