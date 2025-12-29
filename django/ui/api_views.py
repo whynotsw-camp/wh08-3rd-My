@@ -36,7 +36,9 @@ from rest_framework import status
 from .serializers import UserInputSerializer, RecommendationResultSerializer
 from ui.models import Score, Perfume, TopBottom, Dress
 # from .recommend.calculation_v2 import myscore_cal #ver2
-from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
+# from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
+from .recommend.calculation_v4 import myscore_cal #ver4
+
 
 from django.db import transaction
 from rest_framework.renderers import JSONRenderer
