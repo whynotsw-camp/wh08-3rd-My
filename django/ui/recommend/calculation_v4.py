@@ -78,10 +78,467 @@ def calc_color_score(c_vec, f_vec):
     return 100 * (1 - dist / (255 * math.sqrt(3)))
 
 # =========================================================
-# 메인 함수: myscore_cal
+# smelling_myscore_cal 함수
 # 설명: 사용자 ID를 받아 의류 스타일 예측, 계절 매칭, 색상 조화를 종합하여 Top 3 향수를 추천
 # =========================================================
-def myscore_cal_raw(user_id: int) -> pd.DataFrame:
+def smelling_myscore_cal(user_id: int) -> pd.DataFrame:
+    print(f"\n{'=' * 60}")
+    print(f"🚀 myscore_cal 시작: user_id={user_id}")
+    print(f"{'=' * 60}\n")
+
+    # ---------------------------------------------------------
+    # 0. 사용자 smelling 기준 row 조회 (가장 처음 row)
+    # ---------------------------------------------------------
+    user_row = (
+        UserSmellingInput.objects
+        .filter(smelling_user_id=user_id)
+        .order_by("smelling_user_id")
+        .first()
+    )
+
+    if user_row is None:
+        raise ValueError(f"❌ UserSmellingInput 데이터가 없습니다. user_id={user_id}")
+
+    print(f"✅ 사용자 smelling 기준 row 조회 성공: {user_row}")
+
+
+    # ---------------------------------------------------------
+    # 1. 향수 전체 로드 (비선호 향조 제외 로직 제거)
+    # ---------------------------------------------------------
+    print("\nSTEP 1: 향수 전체 로드")
+    perfume_qs = Perfume.objects.all()
+    perfume_df = pd.DataFrame.from_records(perfume_qs.values())
+
+    if perfume_df.empty:
+        raise ValueError("❌ 향수 데이터가 없습니다.")
+
+    # ---------------------------------------------------------
+    # 2. 사용자 의류 정보 병합 (UserSmellingInput 기준)
+    # ---------------------------------------------------------
+    print("\nSTEP 2: 사용자 의류 정보 병합")
+    df_row = pd.DataFrame([{}])
+
+
+    def merge_clothes(df, model_cls, obj_id, prefix):
+        """DB 필드에서 직접 데이터를 추출하여 셋팅 (기본값 없음)"""
+        print(f"🔍 {prefix} 병합 중 (ID: {obj_id})...")
+        clothes = model_cls.objects.get(pk=obj_id)
+
+        if prefix == "상의":
+            df["상의_카테고리"] = clothes.top_category
+            df["상의_색상"] = clothes.top_color.color  # 색상 데이터 필수
+            df["상의_소매기장"] = clothes.top_sleeve_length
+            df["상의_소재"] = clothes.top_material
+            df["상의_프린트"] = clothes.top_print
+            df["상의_넥라인"] = clothes.top_neckline
+            df["상의_핏"] = clothes.top_fit
+            df["상의_서브스타일"] = clothes.sub_style
+        elif prefix == "하의":
+            df["하의_카테고리"] = clothes.bottom_category
+            df["하의_색상"] = clothes.bottom_color.color
+            df["하의_기장"] = clothes.bottom_length
+            df["하의_소재"] = clothes.bottom_material
+            df["하의_핏"] = clothes.bottom_fit
+            df["하의_서브스타일"] = clothes.sub_style
+        elif prefix == "원피스":
+            df["원피스_기장"] = clothes.dress_length
+            df["원피스_색상"] = clothes.dress_color.color
+            df["원피스_소매기장"] = clothes.dress_sleeve_length
+            df["원피스_소재"] = clothes.dress_material
+            df["원피스_프린트"] = clothes.dress_print
+            df["원피스_핏"] = clothes.dress_fit
+            df["원피스_넥라인"] = clothes.dress_neckline
+            df["원피스_디테일"] = clothes.dress_detail
+            df["원피스_서브스타일"] = clothes.sub_style
+        return df
+
+
+    if user_row.top_id_id:
+        df_row = merge_clothes(df_row, TopBottom, user_row.top_id_id, "상의")
+    if user_row.bottom_id_id:
+        df_row = merge_clothes(df_row, TopBottom, user_row.bottom_id_id, "하의")
+    if user_row.dress_id_id:
+        df_row = merge_clothes(df_row, Dress, user_row.dress_id_id, "원피스")
+    # ---------------------------------------------------------
+    # 3. 스타일 예측 (기존 로직 유지)
+    # ---------------------------------------------------------
+    print("\nSTEP 3: 스타일 예측")
+
+    if not user_row.dress_id_id:
+        model, encoder, label_encoder = model_0, encoder_0, label_encoder_0
+        df_row["색상_조합"] = df_row["상의_색상"].astype(str) + "_" + df_row["하의_색상"].astype(str)
+        df_row["핏_조합"] = df_row["상의_핏"].astype(str) + "_" + df_row["하의_핏"].astype(str)
+    else:
+        model, encoder, label_encoder = model_1, encoder_1, label_encoder_1
+
+    raw_encoded = encoder.transform(df_row[list(encoder.feature_names_in_)].astype("object"))
+    encoded_df = pd.DataFrame(raw_encoded, columns=encoder.get_feature_names_out())
+
+    user_style = label_encoder.inverse_transform([model.predict(encoded_df)[0]])[0]
+    print(f"✅ 예측된 스타일: {user_style}")
+
+    # ---------------------------------------------------------
+    # 4. 스타일 기반 향수 필터링
+    # ---------------------------------------------------------
+    print("\nSTEP 4: 스타일 기반 향수 필터링")
+    style_fragrance_score = {
+        "로맨틱": {
+            "플로럴향, 달콤한향": 7,
+            "싱그러운 풀 향": 4,
+            "머스크같은 중후한향": 2,
+            "파우더느낌의 부드러운향": 6,
+            "시원하고 신선한 바다 향": 5,
+            "감귤류의 상큼한 향": 2,
+            "라벤더같은 상쾌한향": 2,
+        },
+        "섹시": {
+            "플로럴향, 달콤한향": 5,
+            "싱그러운 풀 향": 6.5,
+            "머스크같은 중후한향": 6.5,
+            "파우더느낌의 부드러운향": 3,
+            "시원하고 신선한 바다 향": 3,
+            "감귤류의 상큼한 향": 3,
+            "라벤더같은 상쾌한향": 3,
+        },
+        "소피스트케이티드": {
+            "플로럴향, 달콤한향": 6,
+            "싱그러운 풀 향": 4,
+            "머스크같은 중후한향": 4,
+            "파우더느낌의 부드러운향": 7,
+            "시원하고 신선한 바다 향": 4,
+            "감귤류의 상큼한 향": 1.5,
+            "라벤더같은 상쾌한향": 1.5,
+        },
+        "스포티": {
+            "플로럴향, 달콤한향": 5,
+            "싱그러운 풀 향": 4,
+            "머스크같은 중후한향": 2,
+            "파우더느낌의 부드러운향": 3,
+            "시원하고 신선한 바다 향": 7,
+            "감귤류의 상큼한 향": 5,
+            "라벤더같은 상쾌한향": 2,
+        },
+        "클래식": {
+            "플로럴향, 달콤한향": 3.5,
+            "싱그러운 풀 향": 4.5,
+            "머스크같은 중후한향": 2,
+            "파우더느낌의 부드러운향": 6,
+            "시원하고 신선한 바다 향": 7,
+            "감귤류의 상큼한 향": 2,
+            "라벤더같은 상쾌한향": 3.5,
+        },
+        "젠더리스": {
+            "플로럴향, 달콤한향": 5.5,
+            "싱그러운 풀 향": 5.5,
+            "머스크같은 중후한향": 2,
+            "파우더느낌의 부드러운향": 7,
+            "시원하고 신선한 바다 향": 4,
+            "감귤류의 상큼한 향": 4,
+            "라벤더같은 상쾌한향": 2,
+        },
+        "아방가르드": {
+            "플로럴향, 달콤한향": 4,
+            "싱그러운 풀 향": 2.5,
+            "머스크같은 중후한향": 1,
+            "파우더느낌의 부드러운향": 5.5,
+            "시원하고 신선한 바다 향": 7,
+            "감귤류의 상큼한 향": 5.5,
+            "라벤더같은 상쾌한향": 2.5,
+        }
+    }
+
+    style_scores = style_fragrance_score[user_style]
+
+    classification_df = pd.DataFrame.from_records(
+        PerfumeClassification.objects.all().values("perfume_id", "fragrance")
+    )
+
+    valid_ids = classification_df[
+        classification_df["fragrance"].isin(style_scores.keys())
+    ]["perfume_id"].unique()
+
+    perfume_df = perfume_df[perfume_df["perfume_id"].isin(valid_ids)]
+    print(f"✅ 스타일 필터링 후 향수 개수: {len(perfume_df)}")
+
+    # ---------------------------------------------------------
+    # 5. 색상 점수 준비
+    # ---------------------------------------------------------
+    print("\nSTEP 5: 색상 점수 준비")
+    clothes_color_map = {c.color: parse_rgb(c.rgb_tuple) for c in ClothesColor.objects.all()}
+    perfume_color_map = {c.mainaccord: parse_rgb(c.color) for c in PerfumeColor.objects.all()}
+
+    if user_row.dress_id_id:
+        clothes_vec = clothes_color_map[df_row["원피스_색상"].iloc[0]]
+    else:
+        top_rgb = clothes_color_map[df_row["상의_색상"].iloc[0]]
+        bottom_rgb = clothes_color_map[df_row["하의_색상"].iloc[0]]
+        clothes_vec = [top_rgb[i] * 0.7 + bottom_rgb[i] * 0.3 for i in range(3)]
+
+    # ---------------------------------------------------------
+    # 6. 계절 점수 준비
+    # ---------------------------------------------------------
+    print("\nSTEP 6: 계절 점수 준비")
+    season_df = pd.DataFrame.from_records(
+        PerfumeSeason.objects.all().values(
+            "perfume_id", "spring", "summer", "fall", "winter"
+        )
+    )
+
+    season_map = {
+        "봄": "spring", "여름": "summer", "가을": "fall", "겨울": "winter",
+        "spring": "spring", "summer": "summer", "fall": "fall", "winter": "winter"
+    }
+    user_season = season_map[user_row.season]
+
+    # ---------------------------------------------------------
+    # 7. 원점수 계산
+    # ---------------------------------------------------------
+    style_raw, color_raw, season_raw, perfume_ids = [], [], [], []
+
+    fragrance_dict = dict(
+        zip(classification_df["perfume_id"], classification_df["fragrance"])
+    )
+
+    for _, p in perfume_df.iterrows():
+        pid = p["perfume_id"]
+        perfume_ids.append(pid)
+
+        # 스타일
+        style_raw.append(style_scores[fragrance_dict[pid]])
+
+        # 색상
+        a1, a2, a3 = p["mainaccord1_id"], p["mainaccord2_id"], p["mainaccord3_id"]
+        color_vec = mix_rgb(
+            perfume_color_map[a1],
+            perfume_color_map[a2],
+            perfume_color_map[a3]
+        )
+        color_raw.append(calc_color_score(clothes_vec, color_vec))
+
+        # 계절
+        srows = season_df[season_df["perfume_id"] == pid]
+        if srows.empty:
+            season_raw.append(0)
+        else:
+            srow = srows.iloc[0]
+            total = srow[["spring", "summer", "fall", "winter"]].sum()
+            season_raw.append(
+                srow[user_season] / total * 100 if total > 0 else 0
+            )
+
+    # ---------------------------------------------------------
+    # 8. 정규화 + ε smoothing
+    # ---------------------------------------------------------
+    style_mm = MinMaxScaler().fit_transform(np.array(style_raw).reshape(-1, 1))
+    color_mm = MinMaxScaler().fit_transform(np.array(color_raw).reshape(-1, 1))
+    season_mm = MinMaxScaler().fit_transform(np.array(season_raw).reshape(-1, 1))
+
+    EPS = 0.02
+    style_mm = (style_mm + EPS) / (1 + EPS)
+    color_mm = (color_mm + EPS) / (1 + EPS)
+    season_mm = (season_mm + EPS) / (1 + EPS)
+
+    # ---------------------------------------------------------
+    # 9. 최종 DataFrame 생성
+    # ---------------------------------------------------------
+    result_df = pd.DataFrame({
+        "user_id": user_id,
+        "perfume_id": perfume_ids,
+        "style_score": style_mm.flatten(),
+        "color_score": color_mm.flatten(),
+        "season_score": season_mm.flatten(),
+    })
+
+    result_df["myscore"] = (
+        result_df["style_score"] +
+        result_df["color_score"] +
+        result_df["season_score"]
+    )
+
+    result_df = result_df.sort_values("myscore", ascending=False).reset_index(drop=True)
+
+    print(f"\n✅ myscore_cal 완료 (총 {len(result_df)}개 향수 점수 계산)\n")
+
+    return result_df
+
+def find_best_weights(
+    final_result: pd.DataFrame,
+    user_smelling_df: pd.DataFrame,
+    k: int = 3,
+    weight_candidates=None
+):
+    """
+    smelling_myscore_cal 결과를 기반으로
+    Precision@k 평균이 최대가 되는 가중치 탐색
+
+    Parameters
+    ----------
+    final_result : pd.DataFrame
+        columns = [
+            user_id, perfume_id,
+            style_score, color_score, season_score
+        ]
+
+    user_smelling_df : pd.DataFrame
+        columns = [
+            smelling_user_id, perfume_id
+        ]
+
+    k : int
+        Precision@k에서 사용할 k 값
+
+    weight_candidates : list[float]
+        가중치 후보 (기본: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+
+    Returns
+    -------
+    best_weights : dict
+        {
+            "w_style": float,
+            "w_color": float,
+            "w_season": float,
+            "mean_precision": float
+        }
+
+    weight_df : pd.DataFrame
+        모든 가중치 조합 결과
+    """
+
+    if weight_candidates is None:
+        weight_candidates = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+    weight_results = []
+
+    # =========================================================
+    # 1. 가중치 조합 탐색
+    # =========================================================
+    for w_style, w_color, w_season in itertools.product(weight_candidates, repeat=3):
+
+        # 전부 0이면 스킵
+        if w_style + w_color + w_season == 0:
+            continue
+
+        # 합이 1이 되도록 정규화
+        total = w_style + w_color + w_season
+        w_style /= total
+        w_color /= total
+        w_season /= total
+
+        df = final_result.copy()
+        df["myscore"] = (
+            df["style_score"] * w_style +
+            df["color_score"] * w_color +
+            df["season_score"] * w_season
+        )
+
+        # =========================================================
+        # 2. Precision@k 계산
+        # =========================================================
+        topk_df = (
+            df.groupby("user_id", group_keys=False)
+              .apply(lambda x: x.nlargest(k, "myscore"))
+        )
+
+        precisions = []
+
+        for uid in topk_df["user_id"].unique():
+            recs = topk_df[topk_df["user_id"] == uid]["perfume_id"].tolist()
+            actuals = user_smelling_df[
+                user_smelling_df["smelling_user_id"] == uid
+            ]["perfume_id"].tolist()
+
+            if len(actuals) == 0:
+                continue
+
+            hit_count = len(set(recs) & set(actuals))
+            precisions.append(hit_count / k)
+
+        if len(precisions) == 0:
+            mean_prec = 0
+        else:
+            mean_prec = sum(precisions) / len(precisions)
+
+        weight_results.append({
+            "w_style": w_style,
+            "w_color": w_color,
+            "w_season": w_season,
+            "mean_precision": mean_prec
+        })
+
+    # =========================================================
+    # 3. 결과 정리
+    # =========================================================
+    weight_df = pd.DataFrame(weight_results)
+
+    best_row = weight_df.loc[
+        weight_df["mean_precision"].idxmax()
+    ]
+
+    best_weights = {
+        "w_style": best_row["w_style"],
+        "w_color": best_row["w_color"],
+        "w_season": best_row["w_season"],
+        "mean_precision": best_row["mean_precision"]
+    }
+
+    return best_weights, weight_df
+
+
+def build_score_from_smelling() -> pd.DataFrame:
+    """
+    smelling_myscore_cal 결과를 모두 모아
+    find_best_weights에 넣을 final_result 생성
+    """
+    dfs = []
+
+    user_ids = (
+        UserSmellingInput.objects
+        .values_list("smelling_user_id", flat=True)
+        .distinct()
+    )
+
+    for uid in user_ids:
+        try:
+            df = smelling_myscore_cal(uid)
+            dfs.append(df)
+        except Exception as e:
+            print(f"⚠️ user_id={uid} 스킵: {e}")
+
+    if not dfs:
+        raise ValueError("❌ smelling_myscore_cal 결과가 없습니다.")
+
+    return pd.concat(dfs, ignore_index=True)
+
+
+def get_best_weights_from_smelling(k: int = 3):
+    """
+    smelling_myscore_cal 결과 → find_best_weights
+    """
+    # 1. raw 점수
+    final_result = build_score_from_smelling()
+
+    # 2. 정답(사용자 실제 선택 향수)
+    user_smelling_df = pd.DataFrame.from_records(
+        UserSmellingInput.objects.all().values(
+            "smelling_user_id", "perfume_id"
+        )
+    )
+
+    # 3. 가중치 탐색
+    best_weights, weight_df = find_best_weights(
+        final_result=final_result,
+        user_smelling_df=user_smelling_df,
+        k=k
+    )
+
+    print("✅ 최적 가중치:", best_weights)
+    return best_weights
+
+
+from django.db import transaction
+
+
+def myscore_cal(user_id: int) -> list[Score]:
     print(f"\n{'=' * 60}")
     print(f"🚀 myscore_cal 시작: user_id={user_id}")
     print(f"{'=' * 60}\n")
@@ -277,11 +734,7 @@ def myscore_cal_raw(user_id: int) -> pd.DataFrame:
     # 6. 계절 점수 계산: 사용자의 계절 설정(한글/영어 모두 대응)을 기반으로 계절 조화 점수를 미리 계산합니다.
     # ---------------------------------------------------------
     print("\nSTEP 6: 계절 점수 계산")
-    season_df = pd.DataFrame.from_records(
-        PerfumeSeason.objects.all().values(
-            "perfume_id", "spring", "summer", "fall", "winter"
-        )
-    )
+    season_df = pd.DataFrame.from_records(PerfumeSeason.objects.all().values())
     season_map = {
         "봄": "spring", "여름": "summer", "가을": "fall", "겨울": "winter",
         "spring": "spring", "summer": "summer", "fall": "fall", "winter": "winter"
@@ -303,117 +756,88 @@ def myscore_cal_raw(user_id: int) -> pd.DataFrame:
     season_raw = []
     perfume_ids = []
 
-    for _, p in perfume_df.iterrows():
-        pid = p["perfume_id"]
-        perfume_ids.append(pid)
+    for idx, (_, p_row) in enumerate(perfume_df.iterrows(), 1):
+        p_id = p_row["perfume_id"]
+        perfume_ids.append(p_id)
 
-        style_raw.append(style_scores[fragrance_dict[pid]])
+        # 7-1. 스타일 점수
+        p_fragrance = fragrance_dict[p_id]
+        calc_style_score = style_scores[p_fragrance]
+        style_raw.append(calc_style_score)
 
-        a1, a2, a3 = p["mainaccord1_id"], p["mainaccord2_id"], p["mainaccord3_id"]
-        mix_rgb = [
-            perfume_color_map[a1][i] * 0.6 +
-            perfume_color_map[a2][i] * 0.3 +
-            perfume_color_map[a3][i] * 0.1
-            for i in range(3)
-        ]
-        dist = np.linalg.norm(np.array(clothes_vec) - np.array(mix_rgb))
-        color_raw.append(100 * (1 - dist / (255 * np.sqrt(3))))
+        # 7-2. 색상 점수
+        # Pandas DataFrame에서는 FK 필드명이 'mainaccord1_id' 형식이 됨을 유의
+        a1 = p_row["mainaccord1_id"]
+        a2 = p_row["mainaccord2_id"]
+        a3 = p_row["mainaccord3_id"]
 
-        srow = season_df[season_df["perfume_id"] == pid].iloc[0]
-        total = srow[["spring", "summer", "fall", "winter"]].sum()
-        season_raw.append(srow[user_season] / total * 100 if total > 0 else 0)
+        color_vec = mix_rgb(perfume_color_map[a1], perfume_color_map[a2], perfume_color_map[a3])
+        color_score = calc_color_score(clothes_vec, color_vec)
+        color_raw.append(color_score)
 
-    # -----------------------------
-    # 정규화 + ε smoothing
-    # -----------------------------
-    scaler = MinMaxScaler()
-    EPS = 0.02
+        # 7-3. 계절 점수
+        s_row = season_df[season_df["perfume_id"] == p_id].iloc[0]
+        total_season_val = s_row[["spring", "summer", "fall", "winter"]].sum()
+        season_score = (s_row[user_season] / total_season_val * 100) if total_season_val > 0 else 0
+        season_raw.append(season_score)
 
-    style_mm = (scaler.fit_transform(np.array(style_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
-    color_mm = (scaler.fit_transform(np.array(color_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
-    season_mm = (scaler.fit_transform(np.array(season_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
+    # numpy 변환
+    style_raw = np.array(style_raw).reshape(-1, 1)
+    color_raw = np.array(color_raw).reshape(-1, 1)
+    season_raw = np.array(season_raw).reshape(-1, 1)
 
-    return pd.DataFrame({
-        "user_id": user_id,
-        "perfume_id": perfume_ids,
-        "style_score": style_mm.flatten(),
-        "color_score": color_mm.flatten(),
-        "season_score": season_mm.flatten(),
-    })
+    # =========================
+    #  MinMaxScaler 적용
+    # =========================
+    style_mm = MinMaxScaler().fit_transform(style_raw)
+    color_mm = MinMaxScaler().fit_transform(color_raw)
+    season_mm = MinMaxScaler().fit_transform(season_raw)
 
+    best_weights = get_best_weights_from_smelling(k=3)
 
-def find_best_weights(raw_df: pd.DataFrame, user_smell_df: pd.DataFrame, k=5):
-    weights = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-    best_score = -1
-    best_weights = None
+    w_style = best_weights["w_style"]
+    w_color = best_weights["w_color"]
+    w_season = best_weights["w_season"]
 
-    for w_s, w_c, w_se in itertools.product(weights, repeat=3):
-        if w_s + w_c + w_se == 0:
-            continue
+    # =========================
+    # 2차 패스: myscore 계산 & 저장 (ε smoothing 적용)
+    # =========================
+    EPS = 0.02  # ε smoothing 값
+    for idx, p_id in enumerate(perfume_ids, 1):
+        s = (float(style_mm[idx - 1][0]) + EPS) / (1 + EPS)
+        c = (float(color_mm[idx - 1][0]) + EPS) / (1 + EPS)
+        se = (float(season_mm[idx - 1][0]) + EPS) / (1 + EPS)
+        myscore = w_style*s + w_color*c + w_season*se
 
-        total = w_s + w_c + w_se
-        w_s, w_c, w_se = w_s / total, w_c / total, w_se / total
+        if idx <= 3:
+            print(
+                f"향수 #{idx} (ID:{p_id}): "
+                f"Style({s:.3f}) + Color({c:.3f}) + Season({se:.3f}) = {myscore:.3f}"
+            )
 
-        df = raw_df.copy()
-        df["myscore"] = (
-            df["style_score"] * w_s +
-            df["color_score"] * w_c +
-            df["season_score"] * w_se
+        score_list.append(
+            Score(
+                user=user_row,
+                perfume_id=p_id,
+                style_score=s,
+                color_score=c,
+                season_score=se,
+                myscore=myscore,
+                user_style=user_style
+            )
         )
 
-        precisions = []
-        for uid in df["user_id"].unique():
-            topk = df[df["user_id"] == uid].nlargest(k, "myscore")["perfume_id"]
-            actual = user_smell_df[
-                user_smell_df["smelling_user_id"] == uid
-            ]["perfume_id"]
+    # ---------------------------------------------------------
+    # 8. 리턴: myscore 기준 내림차순 정렬 후 상위 3개 객체 리스트를 반환
+    # ---------------------------------------------------------
+    top3 = sorted(score_list, key=lambda x: x.myscore, reverse=True)[:3]
 
-            precisions.append(len(set(topk) & set(actual)) / k)
+    print(f"\n{'=' * 60}")
+    print("🏆 Top3 결과")
+    print(f"{'=' * 60}")
+    for i, score in enumerate(top3, 1):
+        print(f"{i}. Perfume ID: {score.perfume_id}, myscore: {score.myscore:.2f}")
 
-        mean_precision = np.mean(precisions)
+    print(f"\n✅ myscore_cal 완료\n")
 
-        if mean_precision > best_score:
-            best_score = mean_precision
-            best_weights = {
-                "style": w_s,
-                "color": w_c,
-                "season": w_se
-            }
-
-    return best_weights
-
-def myscore_cal(user_id: int) -> list[Score]:
-    # 1. raw 점수
-    raw_df = myscore_cal_raw(user_id)
-
-    # 2. smelling 데이터 → DataFrame
-    user_smell_df = pd.DataFrame.from_records(
-        UserSmellingInput.objects.all().values(
-            "smelling_user_id", "perfume_id"
-        )
-    )
-
-    # 3. 가중치 계산 (전체 raw 기준)
-    weights = find_best_weights(raw_df, user_smell_df, k=5)
-
-    # 4. 최종 myscore
-    raw_df["myscore"] = (
-        raw_df["style_score"] * weights["style"] +
-        raw_df["color_score"] * weights["color"] +
-        raw_df["season_score"] * weights["season"]
-    )
-
-    top_df = raw_df.sort_values("myscore", ascending=False).head(3)
-
-    user = UserInfo.objects.get(user_id=user_id)
-    return [
-        Score(
-            user=user,
-            perfume_id=row["perfume_id"],
-            style_score=row["style_score"],
-            color_score=row["color_score"],
-            season_score=row["season_score"],
-            myscore=row["myscore"]
-        )
-        for _, row in top_df.iterrows()
-    ]
+    return top3
