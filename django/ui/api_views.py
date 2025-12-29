@@ -39,7 +39,8 @@ from ui.models import Score, Perfume, TopBottom, Dress
 
 
 # from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
-from .recommend.calculation_v4 import myscore_cal #ver4
+# from .recommend.calculation_v4 import myscore_cal #ver4
+from .recommend.weight_cal import myscore_cal #ver4
 
 
 
