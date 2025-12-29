@@ -2,7 +2,7 @@
 from ui.models import (
     UserInfo, Perfume, PerfumeClassification,
     PerfumeColor, PerfumeSeason, Score,
-    TopBottom, Dress, ClothesColor
+    TopBottom, Dress, ClothesColor, UserSmellingInput
 )
 from django.db.models import Q
 import math, re
@@ -13,6 +13,7 @@ from django.conf import settings
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import itertools
 
 # =========================================================
 # 모델 로딩: 프로젝트 루트 경로 내 ml_models 폴더에서 학습된 모델을 로드합니다.
@@ -76,12 +77,11 @@ def calc_color_score(c_vec, f_vec):
     dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(c_vec, f_vec)))
     return 100 * (1 - dist / (255 * math.sqrt(3)))
 
-
 # =========================================================
 # 메인 함수: myscore_cal
 # 설명: 사용자 ID를 받아 의류 스타일 예측, 계절 매칭, 색상 조화를 종합하여 Top 3 향수를 추천
 # =========================================================
-def myscore_cal(user_id: int) -> list[Score]:
+def myscore_cal_raw(user_id: int) -> pd.DataFrame:
     print(f"\n{'=' * 60}")
     print(f"🚀 myscore_cal 시작: user_id={user_id}")
     print(f"{'=' * 60}\n")
@@ -277,7 +277,11 @@ def myscore_cal(user_id: int) -> list[Score]:
     # 6. 계절 점수 계산: 사용자의 계절 설정(한글/영어 모두 대응)을 기반으로 계절 조화 점수를 미리 계산합니다.
     # ---------------------------------------------------------
     print("\nSTEP 6: 계절 점수 계산")
-    season_df = pd.DataFrame.from_records(PerfumeSeason.objects.all().values())
+    season_df = pd.DataFrame.from_records(
+        PerfumeSeason.objects.all().values(
+            "perfume_id", "spring", "summer", "fall", "winter"
+        )
+    )
     season_map = {
         "봄": "spring", "여름": "summer", "가을": "fall", "겨울": "winter",
         "spring": "spring", "summer": "summer", "fall": "fall", "winter": "winter"
@@ -299,82 +303,117 @@ def myscore_cal(user_id: int) -> list[Score]:
     season_raw = []
     perfume_ids = []
 
-    for idx, (_, p_row) in enumerate(perfume_df.iterrows(), 1):
-        p_id = p_row["perfume_id"]
-        perfume_ids.append(p_id)
+    for _, p in perfume_df.iterrows():
+        pid = p["perfume_id"]
+        perfume_ids.append(pid)
 
-        # 7-1. 스타일 점수
-        p_fragrance = fragrance_dict[p_id]
-        calc_style_score = style_scores[p_fragrance]
-        style_raw.append(calc_style_score)
+        style_raw.append(style_scores[fragrance_dict[pid]])
 
-        # 7-2. 색상 점수
-        # Pandas DataFrame에서는 FK 필드명이 'mainaccord1_id' 형식이 됨을 유의
-        a1 = p_row["mainaccord1_id"]
-        a2 = p_row["mainaccord2_id"]
-        a3 = p_row["mainaccord3_id"]
+        a1, a2, a3 = p["mainaccord1_id"], p["mainaccord2_id"], p["mainaccord3_id"]
+        mix_rgb = [
+            perfume_color_map[a1][i] * 0.6 +
+            perfume_color_map[a2][i] * 0.3 +
+            perfume_color_map[a3][i] * 0.1
+            for i in range(3)
+        ]
+        dist = np.linalg.norm(np.array(clothes_vec) - np.array(mix_rgb))
+        color_raw.append(100 * (1 - dist / (255 * np.sqrt(3))))
 
-        color_vec = mix_rgb(perfume_color_map[a1], perfume_color_map[a2], perfume_color_map[a3])
-        color_score = calc_color_score(clothes_vec, color_vec)
-        color_raw.append(color_score)
+        srow = season_df[season_df["perfume_id"] == pid].iloc[0]
+        total = srow[["spring", "summer", "fall", "winter"]].sum()
+        season_raw.append(srow[user_season] / total * 100 if total > 0 else 0)
 
-        # 7-3. 계절 점수
-        s_row = season_df[season_df["perfume_id"] == p_id].iloc[0]
-        total_season_val = s_row[["spring", "summer", "fall", "winter"]].sum()
-        season_score = (s_row[user_season] / total_season_val * 100) if total_season_val > 0 else 0
-        season_raw.append(season_score)
+    # -----------------------------
+    # 정규화 + ε smoothing
+    # -----------------------------
+    scaler = MinMaxScaler()
+    EPS = 0.02
 
-    # numpy 변환
-    style_raw = np.array(style_raw).reshape(-1, 1)
-    color_raw = np.array(color_raw).reshape(-1, 1)
-    season_raw = np.array(season_raw).reshape(-1, 1)
+    style_mm = (scaler.fit_transform(np.array(style_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
+    color_mm = (scaler.fit_transform(np.array(color_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
+    season_mm = (scaler.fit_transform(np.array(season_raw).reshape(-1, 1)) + EPS) / (1 + EPS)
 
-    # =========================
-    #  MinMaxScaler 적용
-    # =========================
-    style_mm = MinMaxScaler().fit_transform(style_raw)
-    color_mm = MinMaxScaler().fit_transform(color_raw)
-    season_mm = MinMaxScaler().fit_transform(season_raw)
+    return pd.DataFrame({
+        "user_id": user_id,
+        "perfume_id": perfume_ids,
+        "style_score": style_mm.flatten(),
+        "color_score": color_mm.flatten(),
+        "season_score": season_mm.flatten(),
+    })
 
-    # =========================
-    # 2차 패스: myscore 계산 & 저장 (ε smoothing 적용)
-    # =========================
-    EPS = 0.02  # ε smoothing 값
-    for idx, p_id in enumerate(perfume_ids, 1):
-        s = (float(style_mm[idx - 1][0]) + EPS) / (1 + EPS)
-        c = (float(color_mm[idx - 1][0]) + EPS) / (1 + EPS)
-        se = (float(season_mm[idx - 1][0]) + EPS) / (1 + EPS)
-        myscore = s + c + se
 
-        if idx <= 3:
-            print(
-                f"향수 #{idx} (ID:{p_id}): "
-                f"Style({s:.3f}) + Color({c:.3f}) + Season({se:.3f}) = {myscore:.3f}"
-            )
+def find_best_weights(raw_df: pd.DataFrame, user_smell_df: pd.DataFrame, k=5):
+    weights = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+    best_score = -1
+    best_weights = None
 
-        score_list.append(
-            Score(
-                user=user_row,
-                perfume_id=p_id,
-                style_score=s,
-                color_score=c,
-                season_score=se,
-                myscore=myscore,
-                user_style=user_style
-            )
+    for w_s, w_c, w_se in itertools.product(weights, repeat=3):
+        if w_s + w_c + w_se == 0:
+            continue
+
+        total = w_s + w_c + w_se
+        w_s, w_c, w_se = w_s / total, w_c / total, w_se / total
+
+        df = raw_df.copy()
+        df["myscore"] = (
+            df["style_score"] * w_s +
+            df["color_score"] * w_c +
+            df["season_score"] * w_se
         )
 
-    # ---------------------------------------------------------
-    # 8. 리턴: myscore 기준 내림차순 정렬 후 상위 3개 객체 리스트를 반환
-    # ---------------------------------------------------------
-    top3 = sorted(score_list, key=lambda x: x.myscore, reverse=True)[:3]
+        precisions = []
+        for uid in df["user_id"].unique():
+            topk = df[df["user_id"] == uid].nlargest(k, "myscore")["perfume_id"]
+            actual = user_smell_df[
+                user_smell_df["smelling_user_id"] == uid
+            ]["perfume_id"]
 
-    print(f"\n{'=' * 60}")
-    print("🏆 Top3 결과")
-    print(f"{'=' * 60}")
-    for i, score in enumerate(top3, 1):
-        print(f"{i}. Perfume ID: {score.perfume_id}, myscore: {score.myscore:.2f}")
+            precisions.append(len(set(topk) & set(actual)) / k)
 
-    print(f"\n✅ myscore_cal 완료\n")
+        mean_precision = np.mean(precisions)
 
-    return top3
+        if mean_precision > best_score:
+            best_score = mean_precision
+            best_weights = {
+                "style": w_s,
+                "color": w_c,
+                "season": w_se
+            }
+
+    return best_weights
+
+def myscore_cal(user_id: int) -> list[Score]:
+    # 1. raw 점수
+    raw_df = myscore_cal_raw(user_id)
+
+    # 2. smelling 데이터 → DataFrame
+    user_smell_df = pd.DataFrame.from_records(
+        UserSmellingInput.objects.all().values(
+            "smelling_user_id", "perfume_id"
+        )
+    )
+
+    # 3. 가중치 계산 (전체 raw 기준)
+    weights = find_best_weights(raw_df, user_smell_df, k=5)
+
+    # 4. 최종 myscore
+    raw_df["myscore"] = (
+        raw_df["style_score"] * weights["style"] +
+        raw_df["color_score"] * weights["color"] +
+        raw_df["season_score"] * weights["season"]
+    )
+
+    top_df = raw_df.sort_values("myscore", ascending=False).head(3)
+
+    user = UserInfo.objects.get(user_id=user_id)
+    return [
+        Score(
+            user=user,
+            perfume_id=row["perfume_id"],
+            style_score=row["style_score"],
+            color_score=row["color_score"],
+            season_score=row["season_score"],
+            myscore=row["myscore"]
+        )
+        for _, row in top_df.iterrows()
+    ]
