@@ -44,8 +44,8 @@ from ui.models import Score, Perfume, TopBottom, Dress
 
 
 # from .recommend.calculation_v3 import myscore_cal #ver3 style score 수정
-# from .recommend.calculation_v4 import myscore_cal #ver4
-from .recommend.weight_cal import myscore_cal #ver4
+from .recommend.calculation_v4 import myscore_cal #ver4
+from .recommend.weight_cal import find_best_weights #가중치 update
 
 
 
@@ -296,6 +296,7 @@ class UserInputView(APIView):
 
                 # --- [D] 자동 추천 계산 및 Score 저장 (기존 로직 유지) ---
                 print(f"🔄 [Strict 자동 추천] 사용자 ID: {new_user_info.user_id}")
+
                 top3_scores = myscore_cal(new_user_info.user_id)
 
                 # 기존 점수 삭제 및 새 점수 저장

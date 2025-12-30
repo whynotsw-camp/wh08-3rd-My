@@ -53,4 +53,6 @@ urlpatterns = [
     # 4. 데이터 API 라우터 연결
     # ==========================================
     path('api/', include(router.urls)),
+
+    path("complete/", views.complete_and_update_weight, name="complete"),
 ]

@@ -1,6 +1,9 @@
 from django.shortcuts import render
 from .models import UserSmellingInput
-
+from django.shortcuts import redirect
+from django.views.decorators.http import require_POST
+from ui.recommend.weight_cal import find_best_weights
+from ui.models import Weight
 
 # ==========================================
 # 화면 렌더링 Views (HTML 페이지 연결)
@@ -94,3 +97,15 @@ def my_note_result(request):
     }
 
     return render(request, "ui/my_note_result.html", context)
+
+@require_POST
+def complete_and_update_weight(request):
+    w_style, w_color, w_season = find_best_weights()
+
+    Weight.objects.create(
+        style_weight=w_style,
+        color_weight=w_color,
+        season_weight=w_season,
+    )
+
+    return redirect("home")

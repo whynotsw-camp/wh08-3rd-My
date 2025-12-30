@@ -49,9 +49,17 @@
                 </div>
             </div>
             {% endfor %}
-
+        </div>
+        <!-- ✅ 완료 버튼: 내 향수 아래 오른쪽 -->
+        <div style="text-align: right; margin-top: 20px;">
+            <form action="{% url 'complete' %}" method="post" style="text-align: right; margin-top: 20px;">
+                {% csrf_token %}
+                <button type="submit" class="mynote-complete-btn">
+                    완료
+                </button>
+            </form>
         </div>
     </section>
-
 </div>
+
 {% endblock %}
