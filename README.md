@@ -4,15 +4,11 @@
 
 
 ## 📌 프로젝트 개요
-MyPerfume은 의류 스타일 이미지, 색감, 계절 맥락을 결합해  
-**“왜 이 향수가 나에게 어울리는지 설명할 수 있는”**  
-개인화 향수 추천 시스템입니다.
-
-향수에 대한 전문 지식이 없어도  
-자신의 현재 스타일과 상황에 맞는 향을 이해하고 선택할 수 있도록 설계했습니다.
+향수 지식이 없어도,  
+**지금의 나에게 어울리는 향을 이해하고 선택**할 수 있도록 설계했습니다.
 
 
-## 📖 분석 배경
+### 📖 분석 배경
 기존 향수 추천 서비스는 다음과 같은 한계를 갖고 있습니다.
 
 - 향조·노트 중심 구조로 비전문가에게 진입 장벽이 높음  
@@ -22,7 +18,7 @@ MyPerfume은 의류 스타일 이미지, 색감, 계절 맥락을 결합해
 이러한 문제를 해결하기 위해  
 사용자의 **실제 선택 맥락**을 추천의 출발점으로 설정했습니다
 
-## 🎯 분석 목표
+### 🎯 분석 목표
 사람이 향수를 고를 때 자연스럽게 고려하는 요소를 기준으로  
 추천 로직을 설계하는 것을 목표로 했습니다.
 
@@ -73,9 +69,22 @@ Top-3 향수 추천 + 설명 생성
 /docs # 보고서, 참고 자료
 README.md
 ```
-
 ## 💻 기술 스택
 
-- Backend: Python, Django, Django REST Framework
-- Data/Modeling: Pandas, NumPy, Scikit-learn, LightGBM, CatBoost
-- Infra: Docker, AWS, Nginx, Gunicorn
+### Backend & Frontend
+<img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white">
+<img src="https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white">
+<img src="https://img.shields.io/badge/Django_REST_Framework-ff1709?style=for-the-badge&logo=django&logoColor=white">
+
+### Data / Modeling
+<img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white">
+<img src="https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white">
+<img src="https://img.shields.io/badge/Scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white">
+<img src="https://img.shields.io/badge/LightGBM-02569B?style=for-the-badge&logo=lightgbm&logoColor=white">
+<img src="https://img.shields.io/badge/CatBoost-FFCC00?style=for-the-badge&logo=catboost&logoColor=black">
+
+### Infrastructure
+<img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+<img src="https://img.shields.io/badge/AWS-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white">
+<img src="https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white">
+<img src="https://img.shields.io/badge/Gunicorn-499848?style=for-the-badge&logo=gunicorn&logoColor=white">
