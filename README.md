@@ -50,6 +50,7 @@ Top-3 향수 추천 + 설명 생성
 - 추천 근거가 명확한 설명 가능한 추천 시스템 구현  
 
 ## 📂 서비스 아키텍처
+![](docs/설계_서비스_아키텍처.jpg?size=70)
 <br /> 
 
 ## 📂 프로토타입
@@ -86,3 +87,11 @@ Top-3 향수 추천 + 설명 생성
 | **[양원선](https://github.com/oneline47)** | **[이정수](https://github.com/jungsuu-00)** | **[김태화](https://github.com/kimtaehwa001)** |
 | ![](https://github.com/oneline47.png?size=70) | ![](https://github.com/jungsuu-00.png?size=70) | ![](https://github.com/kimtaehwa001.png?size=70) |
 | 팀장 · 기획<br/>데이터 분석 및 모델링 | 프론트엔드 & 백엔드 구축<br/>데이터 모델링 | 클라우드 엔지니어<br/>백엔드 구축 |
+
+### 한 줄 소감 
+
+|팀원|소감|
+|----|----|
+| 양원선 | ~~~ |
+| 이정수 | ~~~ |
+| 김태화 | ~~~ |
