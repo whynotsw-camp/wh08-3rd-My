@@ -57,7 +57,7 @@ Top-3 향수 추천 + 설명 생성
 | **2025.12.02 ~ 2025.12.08** | - 향수 데이터 수집<br>- 의류 이미지 전처리 |
 | **2025.12.08 ~ 2025.12.23** | - 스타일 분류 모델 개발<br>- 향수 데이터 전처리<br>- 추천 점수 산정 로직 구현<br>- 추천 알고리즘 개발<br>- LLM 연동 |
 | **2025.12.28 ~ 2025.12.30** | - 추천 성능 평가<br>- 가중치 튜닝 및 자동화 |
-| **2025.12.03 ~ 2025.12.31** | - Django UI 개발<br>- REST API 구현<br>- DB 설계(MySQL)<br>- Docker · Nginx · AWS 배포 |
+| **2025.12.03 ~ 2025.12.31** | - Django UI 개발<br>- REST API 구현<br>- DB 설계(MySQL)<br>- Docker · Nginx · Gunicorn · AWS 배포 |
 
 
 ## 🧩 서비스 아키텍처
@@ -68,18 +68,17 @@ Top-3 향수 추천 + 설명 생성
 
 <details>
   <summary>홈 화면</summary>
-
-  <!-- 여기에 이미지 또는 설명 추가 -->
-  <!-- 예: ![](docs/prototype_home.png) -->
+  ![](docs/프로토타입/home.jpg)
 
   - 서비스 소개 및 진입 화면  
   - 향수 추천 / 선물 추천 / 시향 기록으로 이동  
 </details>
 
 <details>
-  <summary>나의 향수 추천</summary>
+  <summary>나의향수 추천</summary>
 
-  <!-- 예: ![](docs/prototype_my_perfume.png) -->
+  ![](docs/프로토타입/for me_1.jpg)
+  ![](docs/프로토타입/for me_2.jpg)
 
   - 의류 이미지 기반 스타일 분석  
   - 색감·계절을 반영한 개인화 향수 추천  
@@ -89,7 +88,8 @@ Top-3 향수 추천 + 설명 생성
 <details>
   <summary>향수 선물 추천</summary>
 
-  <!-- 예: ![](docs/prototype_gift.png) -->
+  ![](docs/프로토타입/for someone_1.jpg)
+  ![](docs/프로토타입/for someone_2.jpg)
 
   - 선물 대상의 이미지·상황 기반 추천  
   - 계절·분위기를 고려한 향수 제안  
@@ -98,7 +98,9 @@ Top-3 향수 추천 + 설명 생성
 <details>
   <summary>시향 기록</summary>
 
-  <!-- 예: ![](docs/prototype_note.png) -->
+  ![](docs/프로토타입/my note_1.png)
+  ![](docs/프로토타입/my note_2.png)
+  ![](docs/프로토타입/my note_3.png)
 
   - 사용자가 시향한 향수 기록  
   - 향에 대한 개인적인 인상 저장  
