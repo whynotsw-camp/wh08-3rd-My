@@ -63,22 +63,30 @@ Top-3 향수 추천 + 설명 생성
 ## 🧩 서비스 아키텍처
 ![](docs/설계_서비스_아키텍처.jpg)
 
-
 ## 🎨 프로토타입
 
 <details>
   <summary>홈 화면</summary>
-  ![](docs/프로토타입/home.jpg)
+
+  <br>
+
+  <div align="center">
+    <img src="docs/프로토타입/home.jpg" width="70%">
+  </div>
 
   - 서비스 소개 및 진입 화면  
   - 향수 추천 / 선물 추천 / 시향 기록으로 이동  
 </details>
 
 <details>
-  <summary>나의향수 추천</summary>
+  <summary>나의 향수 추천</summary>
 
-  ![](docs/프로토타입/for me_1.jpg)
-  ![](docs/프로토타입/for me_2.jpg)
+  <br>
+
+  <div align="center">
+    <img src="docs/프로토타입/for%20me_1.jpg" width="45%">
+    <img src="docs/프로토타입/for%20me_2.jpg" width="45%">
+  </div>
 
   - 의류 이미지 기반 스타일 분석  
   - 색감·계절을 반영한 개인화 향수 추천  
@@ -88,8 +96,12 @@ Top-3 향수 추천 + 설명 생성
 <details>
   <summary>향수 선물 추천</summary>
 
-  ![](docs/프로토타입/for someone_1.jpg)
-  ![](docs/프로토타입/for someone_2.jpg)
+  <br>
+
+  <div align="center">
+    <img src="docs/프로토타입/for%20someone_1.jpg" width="45%">
+    <img src="docs/프로토타입/for%20someone_2.jpg" width="45%">
+  </div>
 
   - 선물 대상의 이미지·상황 기반 추천  
   - 계절·분위기를 고려한 향수 제안  
@@ -98,13 +110,18 @@ Top-3 향수 추천 + 설명 생성
 <details>
   <summary>시향 기록</summary>
 
-  ![](docs/프로토타입/my note_1.png)
-  ![](docs/프로토타입/my note_2.png)
-  ![](docs/프로토타입/my note_3.png)
+  <br>
+
+  <div align="center">
+    <img src="docs/프로토타입/my%20note_1.png" width="30%">
+    <img src="docs/프로토타입/my%20note_2.png" width="30%">
+    <img src="docs/프로토타입/my%20note_3.png" width="30%">
+  </div>
 
   - 사용자가 시향한 향수 기록  
   - 향에 대한 개인적인 인상 저장  
 </details>
+
 
 
 
